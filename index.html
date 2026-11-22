@@ -263,6 +263,14 @@ body.touch #rkHud{display:none}
   #stage.vs #timer{left:auto;right:max(16px,env(safe-area-inset-right,0px));transform:none;min-width:70px}
   #stage.vs #tools{top:calc(12px + 64px)}
 }
+.rank{width:100%;border-collapse:collapse;margin:0 0 16px;font-variant-numeric:tabular-nums}
+.rank th{padding:6px 8px;font:600 12px var(--display);letter-spacing:.16em;text-transform:uppercase;text-align:left;opacity:.65;border-bottom:1px solid var(--line)}
+.rank td{padding:9px 8px;font:600 18px var(--display);letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--line)}
+.rank td:first-child,.rank th:first-child{width:38px;opacity:.7}
+.rank .sc{color:var(--ball);text-align:right}
+.rank th.sc{color:inherit}
+.rank tr.me td{background:rgba(255,122,47,.14)}
+.rank-box{max-height:46vh;overflow-y:auto;margin:0 0 4px}
 /* ---- painel do dono ---- */
 textarea{-webkit-user-select:text;user-select:text}
 #adminPanel{position:fixed;inset:0;z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;background:rgba(8,13,24,.985);color:var(--chalk);font-family:var(--body);font-size:15px;line-height:1.4;text-transform:none;letter-spacing:0;-webkit-user-select:text;user-select:text;padding:max(12px,env(safe-area-inset-top,0px)) max(14px,env(safe-area-inset-right,0px)) max(28px,env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px))}
@@ -361,7 +369,7 @@ div.ad-row{cursor:default}
   <div id="lobby" role="region" aria-label="Lobby">
     <div class="lb-brand"><small>Basquete 3D</small><b>Cesta Livre</b><span id="lbBest"></span></div>
     <div class="lb-tools"><button id="lbOut" class="ibtn" type="button" aria-label="Sair da conta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button><button id="lbFs" class="ibtn fsb" type="button" aria-label="Tela cheia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="e" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="c" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button><button id="lbGear" class="ibtn" type="button" aria-label="Configurações"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button></div>
-    <div class="lb-left"><div class="lb-info" id="lbInfo"></div><button id="lbChars" class="lb-modes lb-chars" type="button" aria-label="Escolher personagem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span><small>Personagem</small><b id="lbCharName">Fogueteiro</b></span><i aria-hidden="true">&#9656;</i></button></div>
+    <div class="lb-left"><div class="lb-info" id="lbInfo"></div><button id="lbRank" class="lb-modes lb-chars" type="button" aria-label="Ver placar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg><span><small>Placar</small><b>Top jogadores</b></span><i aria-hidden="true">&#9656;</i></button><button id="lbChars" class="lb-modes lb-chars" type="button" aria-label="Escolher personagem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span><small>Personagem</small><b id="lbCharName">Fogueteiro</b></span><i aria-hidden="true">&#9656;</i></button></div>
     <div class="lb-actions">
     <button id="lbModes" class="lb-modes" type="button" aria-label="Escolher modo de jogo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span><small>Modos de jogo</small><b id="lbModeName">Rodada 60 s</b></span><i aria-hidden="true">&#9662;</i></button>
     <button id="lbPlay" class="lb-play" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3v18M5.6 5.6c3 3 3 10.8 0 12.8M18.4 5.6c-3 3-3 10.8 0 12.8"/></svg><span>Arremessar</span></button>
@@ -404,8 +412,8 @@ if(isTouch)document.body.classList.add('touch');
 /* ---------- cena ---------- */
 const scene=new T.Scene();
 scene.background=new T.Color(0x0d1526);
-scene.fog=new T.Fog(0x0d1526,26,64);
-const camera=new T.PerspectiveCamera(72,1,0.05,100);
+scene.fog=new T.Fog(0x0d1526,40,90);
+const camera=new T.PerspectiveCamera(72,1,0.1,100);
 camera.rotation.order='YXZ';
 let baseFov=72;
 scene.add(camera);
@@ -460,7 +468,9 @@ function makeCourtTexture(){
   g.save();g.translate(X(0),Z(0));g.fillStyle='rgba(244,239,228,.9)';
   g.font='bold 40px Impact, "Arial Narrow", Arial, sans-serif';g.textAlign='center';g.textBaseline='middle';
   g.fillText('CESTA LIVRE',0,0);g.restore();
-  return new T.CanvasTexture(c);
+  const c2=document.createElement('canvas');c2.width=1024;c2.height=2048;
+  c2.getContext('2d').drawImage(c,0,0,1024,2048);
+  return new T.CanvasTexture(c2);
 }
 function makeBannerTexture(text){
   const c=document.createElement('canvas');c.width=1024;c.height=200;
@@ -498,10 +508,10 @@ function makeShadowTexture(){
 /* ---------- ginásio ---------- */
 const floorTex=makeCourtTexture();
 floorTex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
-const floor=new T.Mesh(new T.PlaneGeometry(17,30),new T.MeshLambertMaterial({map:floorTex,color:0xc8c8c8}));
+const floor=new T.Mesh(new T.PlaneGeometry(17,30),new T.MeshLambertMaterial({map:floorTex,color:0xc8c8c8,emissive:0x1f150a,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-4}));
 floor.rotation.x=-Math.PI/2;floor.renderOrder=-1;scene.add(floor);
 const concrete=new T.Mesh(new T.PlaneGeometry(24,38),new T.MeshLambertMaterial({color:0x232d45}));
-concrete.rotation.x=-Math.PI/2;concrete.position.y=-0.02;scene.add(concrete);
+concrete.rotation.x=-Math.PI/2;concrete.position.y=-0.08;scene.add(concrete);
 const noFace=new T.MeshBasicMaterial({visible:false});
 const boxNoBottom=m=>[m,m,m,noFace,m,m];
 const room=new T.Mesh(new T.BoxGeometry(24,12,38),boxNoBottom(new T.MeshLambertMaterial({color:0x1b2745,side:T.BackSide})));
@@ -978,7 +988,7 @@ function botMove(tx,tz,speed,dt,stopD){
   }
   const px=bot.x-player.pos.x,pz=bot.z-player.pos.z,pd=Math.hypot(px,pz);
   if(pd<0.75&&pd>1e-4){bot.x=player.pos.x+px/pd*0.75;bot.z=player.pos.z+pz/pd*0.75;}
-  bot.x=clamp(bot.x,-8.05,8.05);bot.z=clamp(bot.z,-18.3,18.3);
+  bot.x=clamp(bot.x,-8.05,8.05);bot.z=clamp(bot.z,-16.2,16.2);
   return d;
 }
 function botTakeBall(){
@@ -1057,7 +1067,7 @@ function updateVsBot(dt,t){
   }
   if(a.drT>0){
     a.drT=Math.max(0,a.drT-dt);const q=a.drT/DRIB_T;
-    bot.x=clamp(bot.x+a.drVx*q*dt,-8.05,8.05);bot.z=clamp(bot.z+a.drVz*q*dt,-18.3,18.3);
+    bot.x=clamp(bot.x+a.drVx*q*dt,-8.05,8.05);bot.z=clamp(bot.z+a.drVz*q*dt,-16.2,16.2);
     const ex=bot.x-player.pos.x,ez=bot.z-player.pos.z,ed=Math.hypot(ex,ez);
     if(ed<0.75&&ed>1e-4){bot.x=player.pos.x+ex/ed*0.75;bot.z=player.pos.z+ez/ed*0.75;}
     for(const hh of hoops){const qx=bot.x,qz=bot.z-hh.sg*14.5,qd=Math.hypot(qx,qz);if(qd<0.95&&qd>1e-4){bot.x=qx/qd*0.95;bot.z=hh.sg*14.5+qz/qd*0.95;}}
@@ -1116,7 +1126,7 @@ function stealFx(dx,dz){
   stealWon=true;pullT=0;
   if(mode==='vs'){
     const d=Math.hypot(dx,dz)||1;
-    bot.x=clamp(bot.x+dx/d*0.55,-8.05,8.05);bot.z=clamp(bot.z+dz/d*0.55,-18.3,18.3);
+    bot.x=clamp(bot.x+dx/d*0.55,-8.05,8.05);bot.z=clamp(bot.z+dz/d*0.55,-16.2,16.2);
     bot.g.position.x=bot.x;bot.g.position.z=bot.z;
   }
   bot.ai.stag=0.45;bot.ai.stagAmp=-0.4;
@@ -1414,7 +1424,7 @@ function updateRocket(dt){
       rk.v.y=rk.v.y<-0.5?-rk.v.y*0.38:0;rk.v.x*=0.6;rk.v.z*=0.6;
     }
     if(rk.p.x>11.4||rk.p.x<-11.4){rk.p.x=clamp(rk.p.x,-11.4,11.4);rk.v.x*=-0.4;}
-    if(rk.p.z>18.3||rk.p.z<-18.3){rk.p.z=clamp(rk.p.z,-18.3,18.3);rk.v.z*=-0.4;}
+    if(rk.p.z>18.3||rk.p.z<-18.3){rk.p.z=clamp(rk.p.z,-16.2,16.2);rk.v.z*=-0.4;}
     rkMesh.position.copy(rk.p);
     const sp=rk.v.length();
     if(sp>0.6){tmpD.copy(rk.v).divideScalar(sp);rkMesh.quaternion.setFromUnitVectors(Y_AXIS,tmpD);}
@@ -1653,7 +1663,7 @@ function updatePlayer(dt){
   if(shoveT>0){shoveT=Math.max(0,shoveT-dt);const q=shoveT/SHOVE_T;vx+=shoveVx*q;vz+=shoveVz*q;}
   dribCool=Math.max(0,dribCool-dt);dribGuard=Math.max(0,dribGuard-dt);
   player.pos.x=clamp(player.pos.x+vx*dt,-8.05,8.05);
-  player.pos.z=clamp(player.pos.z+vz*dt,-HALL_Z+0.4,HALL_Z-0.4);
+  player.pos.z=clamp(player.pos.z+vz*dt,-16.2,16.2);
   if(dunking&&player.dunkH){
     player.dunkT+=dt;
     const rx2=player.dunkH.rim.x-player.pos.x,rz2=player.dunkH.rim.z-player.pos.z,D=Math.hypot(rx2,rz2);
@@ -1791,6 +1801,16 @@ function renderCard(kind,res){
      +activeCodesHtml()
      +'<button type="button" class="primary" style="margin-top:18px" data-act="sback">Voltar</button>'
      +'<button type="button" class="ghost" data-act="set-reset">Restaurar padrões</button>';
+  }else if(kind==='rank'){
+    const rows=rankData||[],me=user?String(user.nick).toLowerCase():'';
+    h='<p class="eyebrow">Placar</p><h1>Top jogadores</h1>'
+     +(rankMsg?'<p class="lead">'+esc(rankMsg)+'</p>':(rows.length
+       ?'<div class="rank-box"><table class="rank"><thead><tr><th>#</th><th>Jogador</th><th class="sc">Pontuação</th><th>Personagem</th></tr></thead><tbody>'
+        +rows.map(function(r,i){const own=String(r.nick).toLowerCase()===me,gold=String(r.nick).toLowerCase()==='enaljack';
+          return '<tr'+(own?' class="me"':'')+'><td>'+(i+1)+'</td><td'+(gold?' class="gold"':'')+'>'+(gold?'★ ':'')+esc(r.nick)+'</td><td class="sc">'+r.best+'</td><td>'+esc(charLabel(r.char))+'</td></tr>';}).join('')
+        +'</tbody></table></div><p class="lead" style="margin-top:8px">Pontuação = recorde da rodada de cada jogador.</p>'
+       :'<p class="lead">Ninguém pontuou ainda. Seja o primeiro!</p>'))
+     +'<button type="button" class="primary" data-act="back">Voltar</button>';
   }else if(kind==='pause'){
     h='<p class="eyebrow">Jogo pausado</p><h1>Pausa</h1><p class="lead">'+(mode==='vs'?'Você ('+(team==='A'?'Azul':'Vermelho')+') '+stats.score+' x '+botScore+' Bot · '+DIFF_NAME[difficulty]:'Placar: '+stats.score+' pontos · '+stats.made+' de '+stats.att+' arremessos.')+'</p>'
      +'<button type="button" class="primary" data-act="resume">Continuar</button>'
@@ -2044,6 +2064,18 @@ function applyFpChar(){
   handMat.color.setHex(0xd9a273);
 }
 function charName(){return (CHARACTERS.find(function(c){return c.id===charId;})||CHARACTERS[0]).name;}
+let rankData=null,rankMsg='';
+function charLabel(id){const c=CHARACTERS.find(function(x){return x.id===id;});return c?c.name:String(id||'—');}
+async function openRank(){
+  audio();lobbyEl.hidden=true;heroWrap.visible=true;rankData=null;rankMsg='Carregando...';
+  renderCard('rank');overlay.hidden=false;
+  const r=await api('GET','/api/leaderboard');
+  if(r.status===401){sessionLost(r.data&&r.data.banned?r.data.error:'');return;}
+  if(r.status===200&&r.data&&Array.isArray(r.data.rows)){rankData=r.data.rows;rankMsg='';}
+  else{rankData=null;rankMsg=r.status===0?'Sem conexão com o servidor.':'Não foi possível carregar o placar.';}
+  if(curKind==='rank'&&!overlay.hidden)renderCard('rank');
+}
+el('lbRank').addEventListener('click',openRank);
 el('lbChars').addEventListener('click',function(){audio();lobbyEl.hidden=true;heroWrap.visible=true;renderCard('chars');overlay.hidden=false;});
 /* ---------- códigos ---------- */
 const CODES={

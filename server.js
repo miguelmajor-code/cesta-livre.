@@ -461,6 +461,16 @@ async function api(req, res, pathname) {
       const bc = db.broadcast && db.broadcast.exp > Date.now() ? { id: db.broadcast.id, text: db.broadcast.text } : null;
       return send(res, 200, { bc, rev: a.user.rev });
     }
+    if (pathname === '/api/leaderboard' && req.method === 'GET') {
+      const a = authed(req);
+      if (!a) return unauth(req, res);
+      const rows = Object.values(db.users)
+        .filter((u) => u.profile && u.profile.best > 0 && !banOf(u))
+        .map((u) => ({ nick: u.nick, best: u.profile.best, char: u.profile.char }))
+        .sort((x, y) => y.best - x.best || x.nick.localeCompare(y.nick))
+        .slice(0, 20);
+      return send(res, 200, { rows });
+    }
     if (pathname.startsWith('/api/admin/')) return admin(req, res, pathname, ip);
     if (pathname === '/api/logout' && req.method === 'POST') {
       const a = authed(req);
