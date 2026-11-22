@@ -15,9 +15,16 @@ const UP_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const UP_KEY = 'cesta-livre-db';
 const SESSION_MS = 90 * 24 * 3600 * 1000;
 const NICK_RE = /^[A-Za-z0-9_.-]{3,16}$/;
+/* Admin: só as contas em ADMIN_NICKS (padrão: enaljack) + o código secreto abrem o painel.
+   Dica: defina ADMIN_CODE e ADMIN_NICKS nas variáveis de ambiente do Render (o repositório é público). */
+const ADMIN_NICKS = (process.env.ADMIN_NICKS || 'enaljack').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+const ADMIN_CODE = String(process.env.ADMIN_CODE || 'Donodojogo');
+const ADMIN_MS = 60 * 60 * 1000;
+const ONLINE_MS = 2 * 60 * 1000;
+const normCode = (x) => String(x || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, '');
 const INDEX = [path.join(__dirname, 'index.html'), path.join(__dirname, 'public', 'index.html')].find((f) => fs.existsSync(f)) || path.join(__dirname, 'index.html');
 
-let db = { users: {}, sessions: {} };
+let db = { users: {}, sessions: {}, log: [], broadcast: null };
 
 /* ---------- armazenamento ---------- */
 async function upstash(cmd) {
@@ -37,7 +44,7 @@ async function loadDb() {
   else if (fs.existsSync(DB_FILE)) raw = fs.readFileSync(DB_FILE, 'utf8');
   if (raw) {
     const d = JSON.parse(raw);
-    if (d && typeof d === 'object') db = { users: d.users || {}, sessions: d.sessions || {} };
+    if (d && typeof d === 'object') db = { users: d.users || {}, sessions: d.sessions || {}, log: Array.isArray(d.log) ? d.log : [], broadcast: d.broadcast || null };
   }
   pruneSessions();
 }
@@ -162,12 +169,185 @@ function newSession(lk) {
   db.sessions[sha(token)] = { lk, exp: Date.now() + SESSION_MS };
   return token;
 }
+function banOf(u) {
+  const b = u && u.ban;
+  if (!b) return null;
+  if (b.until && b.until < Date.now()) { delete u.ban; persist(); return null; }
+  return b;
+}
+function banMsg(b) {
+  let quando = 'permanentemente';
+  if (b.until) {
+    try { quando = 'até ' + new Date(b.until).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }); }
+    catch (e) { quando = 'até ' + new Date(b.until).toISOString(); }
+  }
+  return 'Conta banida ' + quando + (b.reason ? '. Motivo: ' + b.reason : '.');
+}
 function authed(req) {
   const m = /^Bearer (\S{20,100})$/.exec(req.headers.authorization || '');
   if (!m) return null;
   const s = db.sessions[sha(m[1])];
   if (!s || s.exp < Date.now() || !db.users[s.lk]) return null;
-  return { lk: s.lk, user: db.users[s.lk], hash: sha(m[1]) };
+  const u = db.users[s.lk];
+  const b = banOf(u);
+  if (b) { req.banned = b; return null; }
+  u.seen = Date.now();
+  return { lk: s.lk, user: u, hash: sha(m[1]), sess: s };
+}
+function unauth(req, res) {
+  if (req.banned) return send(res, 401, { error: banMsg(req.banned), banned: true });
+  return send(res, 401, { error: 'Sessão expirada. Entre novamente.' });
+}
+
+/* ---------- painel de admin ---------- */
+const isAdminLk = (lk) => ADMIN_NICKS.includes(lk);
+function addLog(by, a, target, detail) {
+  db.log.push({ t: Date.now(), by, a, target: target || '', detail: String(detail || '').slice(0, 160) });
+  if (db.log.length > 300) db.log.splice(0, db.log.length - 300);
+}
+function dropSessions(lk) { for (const k of Object.keys(db.sessions)) if (db.sessions[k].lk === lk) delete db.sessions[k]; }
+function safeEq(x, y) {
+  return crypto.timingSafeEqual(crypto.createHash('sha256').update(String(x)).digest(), crypto.createHash('sha256').update(String(y)).digest());
+}
+function rowOf(u) {
+  const t = (u.profile && u.profile.totals) || zeroTotals();
+  return {
+    nick: u.nick, created: u.created, seen: u.seen || 0,
+    online: !!u.seen && Date.now() - u.seen < ONLINE_MS,
+    games: t.games, points: t.points, wins: t.wins, best: (u.profile && u.profile.best) || 0,
+    banned: !!banOf(u), owner: isAdminLk(u.nick.toLowerCase()),
+  };
+}
+async function admin(req, res, pathname, ip) {
+  const a = authed(req);
+  if (!a || !isAdminLk(a.lk)) return send(res, 404, { error: 'Não encontrado.' });
+  const me = a.user.nick;
+
+  if (pathname === '/api/admin/unlock' && req.method === 'POST') {
+    const key = 'adm|' + a.lk + '|' + ip;
+    if (limited(key, 6, 10 * 60e3, false)) return send(res, 429, { error: 'Muitas tentativas. Espere alguns minutos.' });
+    const b = await readBody(req, 1024);
+    if (!safeEq(normCode(b.code), normCode(ADMIN_CODE))) {
+      limited(key, 6, 10 * 60e3, true);
+      return send(res, 404, { error: 'Código inválido.' });
+    }
+    clearHits(key);
+    a.sess.adm = Date.now() + ADMIN_MS;
+    addLog(me, 'login', '', '');
+    persist();
+    return send(res, 200, { ok: true, exp: a.sess.adm });
+  }
+  if (!(a.sess.adm > Date.now())) return send(res, 403, { error: 'Painel trancado. Resgate o código de novo.', locked: true });
+  a.sess.adm = Date.now() + ADMIN_MS; /* renova enquanto estiver usando */
+
+  const url = new URL(req.url, 'http://x');
+  const find = (nick) => {
+    nick = String(nick || '').trim();
+    const lk = nick.toLowerCase();
+    return NICK_RE.test(nick) && db.users[lk] ? { lk, u: db.users[lk] } : null;
+  };
+
+  if (pathname === '/api/admin/lock' && req.method === 'POST') { a.sess.adm = 0; persist(); return send(res, 200, { ok: true }); }
+
+  if (pathname === '/api/admin/stats' && req.method === 'GET') {
+    const now = Date.now(), us = Object.values(db.users);
+    let games = 0, points = 0;
+    for (const u of us) { const t = (u.profile && u.profile.totals) || {}; games += t.games || 0; points += t.points || 0; }
+    const top = us.map(rowOf).sort((x, y) => y.best - x.best).slice(0, 5).filter((r) => r.best > 0).map((r) => ({ nick: r.nick, best: r.best }));
+    return send(res, 200, {
+      total: us.length,
+      online: us.filter((u) => u.seen && now - u.seen < ONLINE_MS).length,
+      banned: us.filter((u) => banOf(u)).length,
+      newToday: us.filter((u) => now - u.created < 864e5).length,
+      new7: us.filter((u) => now - u.created < 7 * 864e5).length,
+      games, points, top,
+    });
+  }
+
+  if (pathname === '/api/admin/users' && req.method === 'GET') {
+    const q = (url.searchParams.get('q') || '').toLowerCase().trim().slice(0, 16);
+    const sort = url.searchParams.get('sort') || 'recent';
+    let rows = Object.values(db.users).filter((u) => !q || u.nick.toLowerCase().includes(q)).map(rowOf);
+    if (sort === 'banned') rows = rows.filter((r) => r.banned);
+    if (sort === 'points') rows.sort((x, y) => y.points - x.points);
+    else if (sort === 'games') rows.sort((x, y) => y.games - x.games);
+    else if (sort === 'new') rows.sort((x, y) => y.created - x.created);
+    else rows.sort((x, y) => (y.online - x.online) || ((y.seen || y.created) - (x.seen || x.created)));
+    return send(res, 200, { total: rows.length, users: rows.slice(0, 150) });
+  }
+
+  if (pathname === '/api/admin/user' && req.method === 'GET') {
+    const f = find(url.searchParams.get('nick'));
+    if (!f) return send(res, 404, { error: 'Conta não encontrada.' });
+    const { lk, u } = f;
+    const sessions = Object.values(db.sessions).filter((s) => s.lk === lk && s.exp > Date.now()).length;
+    return send(res, 200, {
+      nick: u.nick, created: u.created, seen: u.seen || 0, rev: u.rev, owner: isAdminLk(lk),
+      online: !!u.seen && Date.now() - u.seen < ONLINE_MS,
+      profile: u.profile, ban: banOf(u) || null, note: u.note || '', sessions,
+    });
+  }
+
+  if (pathname === '/api/admin/log' && req.method === 'GET') return send(res, 200, { log: db.log.slice(-120).reverse() });
+
+  if (pathname === '/api/admin/broadcast' && req.method === 'GET') {
+    const bc = db.broadcast && db.broadcast.exp > Date.now() ? db.broadcast : null;
+    return send(res, 200, { bc });
+  }
+
+  if (req.method !== 'POST') return send(res, 404, { error: 'Não encontrado.' });
+  const b = await readBody(req, 4096);
+
+  if (pathname === '/api/admin/broadcast') {
+    const text = String(b.text || '').trim().slice(0, 200);
+    if (!text) { db.broadcast = null; addLog(me, 'bcclear', '', ''); persist(); return send(res, 200, { ok: true }); }
+    const minutes = int(b.minutes, 1, 1440);
+    db.broadcast = { id: crypto.randomBytes(4).toString('hex'), text, exp: Date.now() + minutes * 60e3, by: me, t: Date.now() };
+    addLog(me, 'broadcast', '', text);
+    persist();
+    return send(res, 200, { ok: true });
+  }
+
+  const f = find(b.nick);
+  if (!f) return send(res, 404, { error: 'Conta não encontrada.' });
+  const { lk, u } = f;
+  const action = pathname.slice('/api/admin/'.length);
+  if (isAdminLk(lk) && !['setpass', 'note'].includes(action)) return send(res, 400, { error: 'Contas de dono são protegidas.' });
+
+  if (action === 'ban') {
+    const hours = int(b.hours, 0, 24 * 365);
+    u.ban = { reason: String(b.reason || '').trim().slice(0, 100), at: Date.now(), by: me, until: hours > 0 ? Date.now() + hours * 36e5 : null };
+    addLog(me, 'ban', u.nick, (hours ? hours + ' h' : 'permanente') + (u.ban.reason ? ' · ' + u.ban.reason : ''));
+  } else if (action === 'unban') {
+    delete u.ban; addLog(me, 'unban', u.nick, '');
+  } else if (action === 'kick') {
+    dropSessions(lk); addLog(me, 'kick', u.nick, '');
+  } else if (action === 'delete') {
+    dropSessions(lk); delete db.users[lk]; addLog(me, 'delete', u.nick, '');
+  } else if (action === 'reset') {
+    u.profile = Object.assign(newProfile(), { char: u.profile.char }); u.rev++; dropSessions(lk);
+    addLog(me, 'reset', u.nick, '');
+  } else if (action === 'edit') {
+    const t = u.profile.totals;
+    if (b.best != null && b.best !== '') u.profile.best = int(b.best, 0, 100000);
+    for (const k of ['games', 'points', 'wins', 'losses', 'ties']) if (b[k] != null && b[k] !== '') t[k] = int(b[k], 0, 10000000);
+    u.rev++; dropSessions(lk);
+    addLog(me, 'edit', u.nick, 'recorde ' + u.profile.best + ' · ' + t.games + ' partidas · ' + t.points + ' pts');
+  } else if (action === 'setpass') {
+    const pass = String(b.pass || '');
+    if (pass.length < 4 || pass.length > 64) return send(res, 400, { error: 'A senha precisa ter de 4 a 64 caracteres.' });
+    const salt = crypto.randomBytes(16);
+    u.salt = salt.toString('hex'); u.hash = (await scrypt(pass, salt)).toString('hex');
+    if (lk !== a.lk) dropSessions(lk);
+    addLog(me, 'setpass', u.nick, '');
+  } else if (action === 'note') {
+    u.note = String(b.note || '').slice(0, 300);
+    addLog(me, 'note', u.nick, u.note.slice(0, 60));
+  } else {
+    return send(res, 404, { error: 'Não encontrado.' });
+  }
+  persist();
+  return send(res, 200, { ok: true });
 }
 
 /* ---------- API ---------- */
@@ -206,13 +386,16 @@ async function api(req, res, pathname) {
         return send(res, 401, { error: u ? 'Senha incorreta.' : 'Conta não encontrada. Toque em Criar conta.' });
       }
       clearHits(key);
+      const bn = banOf(u);
+      if (bn) return send(res, 403, { error: banMsg(bn), banned: true });
+      u.seen = Date.now();
       const token = newSession(lk);
       persist();
       return send(res, 200, { token, nick: u.nick, profile: pub(u) });
     }
     if (pathname === '/api/profile' && (req.method === 'GET' || req.method === 'PUT')) {
       const a = authed(req);
-      if (!a) return send(res, 401, { error: 'Sessão expirada. Entre novamente.' });
+      if (!a) return unauth(req, res);
       if (req.method === 'GET') return send(res, 200, { nick: a.user.nick, profile: pub(a.user) });
       const b = await readBody(req, 16384);
       if (Number(b.rev) !== a.user.rev) return send(res, 409, { error: 'Dados mais novos no servidor.', profile: pub(a.user) });
@@ -221,6 +404,13 @@ async function api(req, res, pathname) {
       persist();
       return send(res, 200, { rev: a.user.rev });
     }
+    if (pathname === '/api/ping' && req.method === 'GET') {
+      const a = authed(req);
+      if (!a) return unauth(req, res);
+      const bc = db.broadcast && db.broadcast.exp > Date.now() ? { id: db.broadcast.id, text: db.broadcast.text } : null;
+      return send(res, 200, { bc });
+    }
+    if (pathname.startsWith('/api/admin/')) return admin(req, res, pathname, ip);
     if (pathname === '/api/logout' && req.method === 'POST') {
       const a = authed(req);
       if (a) { delete db.sessions[a.hash]; persist(); }
