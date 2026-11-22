@@ -420,8 +420,35 @@ function roomLeave(lk) {
   roomOf.delete(lk);
   const r = code && rooms.get(code);
   if (!r) return;
+  const m = r.members.get(lk);
   r.members.delete(lk);
+  ballGone(r, lk, m);
   if (!r.members.size) rooms.delete(code);
+}
+/* Bola única da sala: quem segura (holder) e quem simula a física quando está solta (owner). */
+function newBall(holder) { return { x: 0, y: 0.12, z: 0, vx: 0, vy: 0, vz: 0, holder, owner: holder, seq: 0 }; }
+function ballGone(r, lk, m) {
+  const b = r.ball;
+  if (!b) return;
+  if (b.holder === lk) { b.x = m ? m.x : 0; b.y = 0.12; b.z = m ? m.z : 0; b.vx = b.vy = b.vz = 0; b.holder = null; b.seq++; }
+  if (b.owner === lk) b.owner = b.holder || r.members.keys().next().value || null;
+}
+function ballFix(r, self) {
+  const b = r.ball, now = Date.now();
+  if (!b) return;
+  const hm = b.holder && r.members.get(b.holder);
+  if (b.holder && (!hm || (now - hm.t > ROOM_SEEN && b.holder !== self))) {
+    if (hm) { b.x = hm.x; b.z = hm.z; }
+    b.y = 0.12; b.vx = b.vy = b.vz = 0; b.holder = null; b.seq++; b.owner = self;
+  }
+  const om = r.members.get(b.owner);
+  if (!b.holder && (!om || (now - om.t > ROOM_SEEN && b.owner !== self))) b.owner = self;
+}
+function ballOut(r, self) {
+  const b = r.ball;
+  if (!b) return null;
+  const hm = b.holder && r.members.get(b.holder);
+  return { x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, seq: b.seq, h: hm ? hm.nick : null, hy: b.holder === self, oy: b.owner === self };
 }
 function roomJoin(r, lk, nick) {
   if (roomOf.get(lk) && roomOf.get(lk) !== r.code) roomLeave(lk);
@@ -430,13 +457,13 @@ function roomJoin(r, lk, nick) {
 }
 function roomPrune(r) {
   const now = Date.now();
-  for (const [lk, m] of r.members) if (now - m.t > ROOM_DROP) { r.members.delete(lk); if (roomOf.get(lk) === r.code) roomOf.delete(lk); }
+  for (const [lk, m] of r.members) if (now - m.t > ROOM_DROP) { r.members.delete(lk); ballGone(r, lk, m); if (roomOf.get(lk) === r.code) roomOf.delete(lk); }
 }
 function roomPlayers(r, self) {
   const now = Date.now(), out = [];
   for (const [lk, m] of r.members) {
     if (now - m.t > ROOM_SEEN && lk !== self) continue;
-    out.push({ nick: m.nick, char: m.char, score: m.score, x: m.x, z: m.z, y: m.y, yaw: m.yaw, you: lk === self });
+    out.push({ nick: m.nick, char: m.char, score: m.score, a: m.a || 0, x: m.x, z: m.z, y: m.y, yaw: m.yaw, you: lk === self });
   }
   return out;
 }
@@ -518,13 +545,13 @@ async function api(req, res, pathname) {
       const a = authed(req);
       if (!a) return unauth(req, res);
       const act = pathname.slice('/api/room/'.length);
-      const b = await readBody(req, 1024);
+      const b = await readBody(req, 2048);
       if (act === 'create') {
         if (limited('roomc|' + a.lk, 10, 60e3, true)) return send(res, 429, { error: 'Muitas salas criadas. Espere um pouco.' });
         roomLeave(a.lk);
         const code = newRoomCode();
         if (!code) return send(res, 503, { error: 'Não foi possível criar a sala agora.' });
-        const r = { code, host: a.lk, created: Date.now(), members: new Map() };
+        const r = { code, host: a.lk, created: Date.now(), members: new Map(), ball: newBall(a.lk) };
         rooms.set(code, r);
         roomJoin(r, a.lk, a.user.nick);
         return send(res, 200, { code });
@@ -553,8 +580,29 @@ async function api(req, res, pathname) {
         m.y = flt(b.y, 0, 4, 0); m.yaw = flt(b.yaw, -1000, 1000, m.yaw);
         m.char = typeof b.char === 'string' && /^[a-z0-9_-]{1,24}$/.test(b.char) ? b.char : m.char;
         m.score = int(b.score, 0, 100000);
+        m.a = int(b.a, 0, 6);
         m.t = Date.now();
-        return send(res, 200, { code: r.code, players: roomPlayers(r, a.lk) });
+        const bl = r.ball;
+        if (bl) {
+          ballFix(r, a.lk);
+          if (b.bs === 1 && bl.holder && bl.holder !== a.lk) {
+            /* roubo: precisa estar perto de quem segura (Ser Perfeito rouba de qualquer lugar) */
+            const hm = r.members.get(bl.holder);
+            if (m.char === 'serperfeito' || (hm && Math.hypot(hm.x - m.x, hm.z - m.z) < 3.5)) { bl.holder = a.lk; bl.owner = a.lk; bl.seq++; }
+          } else if (b.bg === 1 && !bl.holder && (bl.owner === a.lk || Math.hypot(bl.x - m.x, bl.z - m.z) < 4.5)) {
+            bl.holder = a.lk; bl.owner = a.lk; bl.seq++;
+          }
+          if (b.bf === 1 && (bl.holder === a.lk || (!bl.holder && bl.owner === a.lk))) {
+            bl.holder = null; bl.owner = a.lk;
+            bl.x = flt(b.bx, -14, 14, bl.x); bl.y = flt(b.by, 0, 12, bl.y); bl.z = flt(b.bz, -22, 22, bl.z);
+            bl.vx = flt(b.bvx, -40, 40, 0); bl.vy = flt(b.bvy, -40, 40, 0); bl.vz = flt(b.bvz, -40, 40, 0);
+            bl.seq++;
+          }
+          if (b.bd === 1 && !bl.holder && bl.owner === a.lk) {
+            for (const [k, o] of r.members) if (k !== a.lk && Date.now() - o.t < ROOM_SEEN) { bl.owner = k; break; }
+          }
+        }
+        return send(res, 200, { code: r.code, players: roomPlayers(r, a.lk), ball: ballOut(r, a.lk) });
       }
       if (act === 'leave') { roomLeave(a.lk); return send(res, 200, { ok: true }); }
       return send(res, 404, { error: 'Não encontrado.' });

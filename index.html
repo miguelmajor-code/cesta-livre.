@@ -761,7 +761,7 @@ addHoop(1);addHoop(-1);
 const ballMesh=new T.Mesh(new T.SphereGeometry(BR,32,24),new T.MeshPhongMaterial({map:makeBallTexture(),shininess:18,specular:0x222222,emissive:0x6a2a00}));
 const shadow=new T.Mesh(new T.PlaneGeometry(2,2),new T.MeshBasicMaterial({map:makeShadowTexture(),transparent:true,depthWrite:false}));
 shadow.rotation.x=-Math.PI/2;shadow.position.y=0.014;scene.add(shadow);
-const ball={botHeld:false,held:true,vel:new T.Vector3(),spin:new T.Vector3(),cool:0,phase:0,cnt:0,shot:null};
+const ball={botHeld:false,remHeld:null,held:true,vel:new T.Vector3(),spin:new T.Vector3(),cool:0,phase:0,cnt:0,shot:null};
 camera.add(ballMesh);ballMesh.position.set(0.3,-0.32,-0.62);
 
 /* ---------- tatuagens do Fogueteiro (texturas) ---------- */
@@ -1150,6 +1150,19 @@ function shoveSelf(){
 /* chance de roubar a bola: o Fogueteiro acerta 50% das vezes; os demais personagens, 100% */
 function stealRoll(){return charId!=='fogueteiro'||Math.random()<0.5;}
 function attemptSteal(){
+  if(onl){
+    if(!ball.remHeld)return;
+    const rr=remotes.get(ball.remHeld),perfect=charId==='serperfeito';
+    let dx=0,dz=0,d=99,diff=9;
+    if(rr){dx=rr.g.position.x-player.pos.x;dz=rr.g.position.z-player.pos.z;d=Math.hypot(dx,dz);diff=Math.abs(wrapPi(player.yaw-Math.atan2(-dx,-dz)));}
+    if(perfect||(d<1.9&&diff<0.8)){
+      if(!stealRoll()){toast('O roubo falhou!','bad');return;}
+      grabBall();onl.steal=true;onKickSafe();
+      toast('Roubou!','good');stealFx(dx,dz);
+      try{tone(300,720,0.16,'triangle',0.12);}catch(e){}
+    }
+    return;
+  }
   if(!bot.g.visible)return;
   if(mode==='vs'){
     if(!ball.botHeld)return;
@@ -1335,6 +1348,7 @@ function doDunk(){
   player.dunkT=0;player.dunkH=nh.h;player.kick=0.03;relT=0;trailClear();
   ball.shot={three:false,touched:false,board:false,scored:false,resolved:false,dunk:true};
   stats.att++;sfx.bounce(2);refreshHud();
+  if(onl)onlRelease();
 }
 /* ---------- habilidade do Fogueteiro: rojão-flash (estilo flash bang do CS) ---------- */
 const RK_CD=10,RK_FUSE=1.4,RK_SPEED=9;
@@ -1493,9 +1507,11 @@ function shoot(power){
   stats.att++;
   sfx.bounce(2);
   refreshHud();
+  if(onl)onlRelease();
 }
 function grabBall(){
-  ball.dunk=null;ball.botHeld=false;
+  ball.dunk=null;ball.botHeld=false;ball.remHeld=null;
+  if(onl){onl.own=true;onl.chg=performance.now();}
   if(ball.shot&&!ball.shot.resolved)resolveMiss();
   ball.shot=null;trailClear();
   camera.add(ballMesh);
@@ -1735,7 +1751,7 @@ const ballRing=new T.Mesh(new T.RingGeometry(0.32,0.42,40),new T.MeshBasicMateri
 ballRing.rotation.x=-Math.PI/2;ballRing.position.y=0.03;scene.add(ballRing);
 function updateBallFx(t){
   const wp=new T.Vector3();ballMesh.getWorldPosition(wp);
-  const free=!ball.held&&!ball.botHeld&&ballMesh.visible;
+  const free=!ball.held&&!ball.botHeld&&!ball.remHeld&&ballMesh.visible;
   ballHalo.visible=free;ballRing.visible=free;
   if(!free)return;
   const d=wp.distanceTo(camera.position),pulse=0.5+0.5*Math.sin(t*5);
@@ -1885,7 +1901,15 @@ function startGame(){
   bot.g.position.set(bot.x,0,bot.z);bot.g.rotation.y=Math.atan2(player.pos.x-bot.x,player.pos.z-bot.z);
   Object.assign(bot.ai,{spot:null,shootT:0,cd:0,stun:mode==='vs'?1.2:0,hop:0,phase:0,cnt:0,moving:false,dk:-1,windup:false,drT:0,drCool:0,drGuard:0,drSnd:0,drDir:1,drVx:0,drVz:0,seenSteal:-1,spd:1,boostT:0,drPen:0,drTrack:false,drBlocked:false});
   dribSpd=codeOn('TURBO')?1.1:1;dribPen=0;shoveT=0;dribBoostT=0;dribBoostPend=false;
-  grabBall();
+  if(onl){
+    /* online: a bola é única e quem decide o dono é o servidor; espera o primeiro estado dele */
+    if(!onl.got){
+      if(ball.held){ball.held=false;scene.add(ballMesh);}
+      ballMesh.rotation.set(0,0,0);ballMesh.position.set(0,BR,0);ball.vel.set(0,0,0);
+      ball.dunk=null;ball.shot=null;ball.remHeld=null;ball.botHeld=false;ball.cool=0;
+      ballMesh.visible=false;
+    }
+  }else grabBall();
   if(!hintEl.dataset.b)hintEl.dataset.b=hintEl.innerHTML;
   hintEl.innerHTML=hintEl.dataset.b+(mode==='vs'?'<br><b>Time '+team+' ('+(team==='A'?'azul':'vermelho')+'):</b> ataque o aro '+(team==='A'?'vermelho':'azul')+'. Proteja a bola e roube dele com <b>E</b>, principalmente quando ele arma o arremesso':'');
   hintEl.classList.remove('off');
@@ -1913,6 +1937,12 @@ function toMenu(){
 function endGame(){
   rkReset();
   state='over';charging=false;charge=0;
+  if(onl){
+    /* solta a bola na sala para o outro jogador poder pegar */
+    if(ball.held){scene.add(ballMesh);ballMesh.rotation.set(0,0,0);ballMesh.position.set(player.pos.x,1.0,player.pos.z);ball.vel.set(0,0,0);ball.held=false;ball.cool=0.7;onl.own=true;onl.chg=performance.now();}
+    if(onl.own&&!ball.remHeld)onl.drop=true;
+    onKickSafe();
+  }
   const isVs=mode==='vs',cheat=devActive(),newBest=!cheat&&!isVs&&stats.score>best&&stats.score>0;
   if(newBest)best=stats.score;
   if(prof&&!cheat){
@@ -2150,9 +2180,9 @@ function roomRosterHtml(){
 function openPass(){audio();lobbyEl.hidden=true;heroWrap.visible=true;roomMsg='';renderCard('pass');overlay.hidden=false;}
 el('lbPass').addEventListener('click',openPass);
 function enterRoom(code,players){
-  onl={code:code,players:players||[]};roomPrevMode=mode;mode='timed';
+  onl={code:code,players:players||[],own:false,got:false,seq:-1,chg:0,steal:false,drop:false,again:false,ph:0};roomPrevMode=mode;mode='timed';
   startGame();lockPointer();
-  clearInterval(roomT);roomT=setInterval(roomSync,200);roomSync();
+  clearInterval(roomT);roomT=setInterval(roomSync,120);roomSync();
 }
 async function createRoom(){
   if(roomBusy)return;roomBusy=true;roomMsg='';
@@ -2180,16 +2210,61 @@ async function roomSync(){
   if(!onl||roomSyncing||!user)return;
   roomSyncing=true;
   const code=onl.code;
-  const r=await api('POST','/api/room/sync',{code:code,x:+player.pos.x.toFixed(2),z:+player.pos.z.toFixed(2),yaw:+player.yaw.toFixed(2),y:+Math.max(0,player.jump).toFixed(2),char:charId,score:stats.score});
+  const pl={code:code,x:+player.pos.x.toFixed(2),z:+player.pos.z.toFixed(2),yaw:+player.yaw.toFixed(2),y:+Math.max(0,player.jump).toFixed(2),char:charId,score:stats.score,bg:ball.held?1:0,a:armState()};
+  if(onl.steal){pl.bs=1;onl.steal=false;}
+  if(!ball.held&&!ball.remHeld&&onl.own&&(state==='playing'||onl.drop)){
+    const p=ballMesh.position,v=ball.vel;
+    pl.bf=1;pl.bx=+p.x.toFixed(2);pl.by=+p.y.toFixed(2);pl.bz=+p.z.toFixed(2);pl.bvx=+v.x.toFixed(2);pl.bvy=+v.y.toFixed(2);pl.bvz=+v.z.toFixed(2);
+  }
+  if(onl.drop){pl.bd=1;onl.drop=false;onl.own=false;}
+  const r=await api('POST','/api/room/sync',pl);
   roomSyncing=false;
+  if(onl&&onl.again){onl.again=false;setTimeout(roomSync,0);}
   if(!onl||onl.code!==code)return;
   if(r.status===401){sessionLost(r.data&&r.data.banned?r.data.error:'');return;}
   if(r.status===404&&r.data&&r.data.gone){showBcast('A sala foi encerrada. Crie uma nova ou entre com outro código.','Passe');toMenu();return;}
   if(r.status===200&&r.data&&Array.isArray(r.data.players)){
     onl.players=r.data.players;applyRemotes(onl.players);
+    if(r.data.ball)applyBall(r.data.ball);
     const sig=onl.players.map(function(p){return p.nick+':'+p.score+':'+p.char;}).join('|');
     if(sig!==roomSig){roomSig=sig;if(curKind==='pause'&&!overlay.hidden&&state==='paused')renderCard('pause');}
   }
+}
+/* ---- bola única da sala ---- */
+function onlKick(){if(!onl)return;if(roomSyncing)onl.again=true;else roomSync();}
+function onKickSafe(){onlKick();}
+function onlRelease(){onl.own=true;onl.chg=performance.now();onlKick();}
+function updateRemHeld(dt){
+  if(!onl)return;
+  const r=remotes.get(ball.remHeld);
+  onl.ph+=dt*7;
+  if(!r)return;
+  const g=r.g,fx=Math.sin(g.rotation.y),fz=Math.cos(g.rotation.y),h=Math.abs(Math.cos(onl.ph));
+  const up=r.a===2||r.a===5||r.a===3;
+  ballMesh.position.set(g.position.x+fx*(up?0.3:0.6),up?2.2+g.position.y:BR+h*0.95,g.position.z+fz*(up?0.3:0.6));
+  ballMesh.rotation.x+=dt*5;
+}
+function applyBall(b){
+  if(!onl)return;
+  const first=!onl.got;
+  if(first){onl.got=true;ballMesh.visible=true;onl.chg=0;}
+  if(!first&&performance.now()-onl.chg<700)return; /* acabei de pegar/soltar: espera o servidor confirmar */
+  if(b.hy){ball.remHeld=null;if(!ball.held)grabBall();onl.seq=b.seq;return;}
+  if(ball.held){
+    ball.held=false;scene.add(ballMesh);ballMesh.rotation.set(0,0,0);ball.vel.set(0,0,0);charging=false;charge=0;
+    if(b.h)toast('Roubaram sua bola!','bad');
+  }
+  if(b.h||!b.oy){
+    if(ball.shot&&!ball.shot.resolved)resolveMiss();
+    ball.shot=null;ball.dunk=null;trailClear();
+  }
+  if(b.h){ball.remHeld=String(b.h).toLowerCase();onl.own=false;onl.seq=b.seq;return;}
+  ball.remHeld=null;
+  onl.own=!!b.oy;
+  if(first||(!b.oy&&b.seq!==onl.seq)){
+    ballMesh.position.set(b.x,b.y,b.z);ball.vel.set(b.vx,b.vy,b.vz);ball.cool=0;
+  }
+  onl.seq=b.seq;
 }
 function nameTag(text){
   const c=document.createElement('canvas');c.width=256;c.height=64;const g=c.getContext('2d');
@@ -2208,9 +2283,17 @@ function makeRemote(p){
   const visor=new T.Mesh(new T.BoxGeometry(0.3,0.08,0.14),new T.MeshLambertMaterial({color:0x15181f}));visor.position.set(0,0.78*k,0.13*k);g.add(visor);
   const sh=new T.Mesh(new T.PlaneGeometry(1.5,1.5),new T.MeshBasicMaterial({map:makeShadowTexture(),transparent:true,opacity:0.6,depthWrite:false}));
   sh.rotation.x=-Math.PI/2;sh.position.y=0.016;g.add(sh);
+  const arms=[];
+  const armGeo2=new T.CylinderGeometry(0.075,0.07,0.7,10);armGeo2.translate(0,-0.35,0);
+  for(const sx of [-1,1]){
+    const pv=new T.Group();pv.position.set(sx*0.45,1.12,0.02);pv.userData.sx=sx;
+    pv.add(new T.Mesh(armGeo2,jersey));
+    const hd=new T.Mesh(new T.SphereGeometry(0.09,12,10),skin);hd.position.y=-0.74;pv.add(hd);
+    pv.rotation.set(0.08,0,sx*0.12);g.add(pv);arms.push(pv);
+  }
   g.add(nameTag(p.nick));
   g.position.set(p.x,0,p.z);g.rotation.y=p.yaw+Math.PI;scene.add(g);
-  return {g:g,jersey:jersey,char:p.char,tx:p.x,tz:p.z,ty:0,tyaw:p.yaw+Math.PI};
+  return {g:g,jersey:jersey,char:p.char,tx:p.x,tz:p.z,ty:0,tyaw:p.yaw+Math.PI,arms:arms,a:p.a||0};
 }
 function applyRemotes(list){
   const seen={};
@@ -2220,11 +2303,32 @@ function applyRemotes(list){
     let r=remotes.get(key);
     if(!r){r=makeRemote(p);remotes.set(key,r);note(p.nick+' entrou na sala');}
     if(r.char!==p.char){r.char=p.char;r.jersey.color.setHex(CHAR_COL[p.char]||0x8fa0c8);}
-    r.tx=p.x;r.tz=p.z;r.ty=p.y;r.tyaw=p.yaw+Math.PI;
+    r.tx=p.x;r.tz=p.z;r.ty=p.y;r.a=p.a||0;r.tyaw=p.yaw+Math.PI;
   }
   for(const [key,r] of remotes)if(!seen[key]){scene.remove(r.g);remotes.delete(key);note('Um jogador saiu da sala');}
 }
 function clearRemotes(){for(const r of remotes.values())scene.remove(r.g);remotes.clear();}
+/* poses dos braços de quem joga online: 0 solto, 1 com a bola, 2 carregando, 3 soltou, 4 roubo, 5 enterrada, 6 drible */
+function remPose(a,sx,t){
+  switch(a){
+    case 1:return [-1.15,-sx*0.3];
+    case 2:return [-2.5,-sx*0.2];
+    case 3:return [-2.8,-sx*0.1];
+    case 4:return [sx>0?-1.6+0.3*Math.sin(t*22):-1.25,sx*0.5];
+    case 5:return [-2.9,-sx*0.1];
+    case 6:return sx>0?[-0.9+0.55*Math.sin(t*14),-0.15]:[-0.25,sx*0.35];
+    default:return [0.08,sx*0.12];
+  }
+}
+function armState(){
+  if(state!=='playing')return ball.held?1:0;
+  if(stealT>0)return 4;
+  if(player.dunkT>=0)return 5;
+  if(dribT>0)return 6;
+  if(charging)return 2;
+  if(relT<0.35)return 3;
+  return ball.held?1:0;
+}
 function updateRemotes(dt){
   if(!remotes.size)return;
   const k=1-Math.exp(-12*dt);
@@ -2232,6 +2336,8 @@ function updateRemotes(dt){
     const g=r.g;
     g.position.x+=(r.tx-g.position.x)*k;g.position.z+=(r.tz-g.position.z)*k;g.position.y+=(r.ty-g.position.y)*k;
     g.rotation.y+=wrapPi(r.tyaw-g.rotation.y)*k;
+    const ka=1-Math.exp(-18*dt),tt=performance.now()/1000;
+    for(const pv of r.arms){const q=remPose(r.a,pv.userData.sx,tt);pv.rotation.x+=(q[0]-pv.rotation.x)*ka;pv.rotation.z+=(q[1]-pv.rotation.z)*ka;}
   }
 }
 el('lbChars').addEventListener('click',function(){audio();lobbyEl.hidden=true;heroWrap.visible=true;renderCard('chars');overlay.hidden=false;});
@@ -2909,6 +3015,7 @@ function frame(now){
     if(charging){charge=Math.min(1,charge+dt/2.2);}
     if(ball.held){updateHeld(dt,tAcc);}
     else if(ball.botHeld){updateBotBall(dt);}
+    else if(ball.remHeld){updateRemHeld(dt);}
     else{
       const n=Math.max(1,Math.ceil(dt/(1/180))),sdt=dt/n;
       for(let i=0;i<n;i++)stepBall(sdt);
@@ -2947,7 +3054,7 @@ function frame(now){
         sweetEl.style.display='none';
         btnShoot.style.setProperty('--s','0%');btnShoot.style.setProperty('--e','0%');
       }
-      pickEl.classList.toggle('on',!ball.held&&!ball.botHeld&&ball.cool<=0&&mode!=='vs'||(mode==='vs'&&!ball.held&&!ball.botHeld&&ball.cool<=0));
+      pickEl.classList.toggle('on',!ball.held&&!ball.botHeld&&!ball.remHeld&&ball.cool<=0);
       refreshHud();
     }
     fillEl.style.width=(charge*100)+'%';
