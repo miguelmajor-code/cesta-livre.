@@ -19,12 +19,17 @@ const NICK_RE = /^[A-Za-z0-9_.-]{3,16}$/;
    Dica: defina ADMIN_CODE e ADMIN_NICKS nas variáveis de ambiente do Render (o repositório é público). */
 const ADMIN_NICKS = (process.env.ADMIN_NICKS || 'enaljack').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
 const ADMIN_CODE = String(process.env.ADMIN_CODE || 'Donodojogo');
+/* Desenvolvedor: código DSVVDCP. Pode ver contas, banir/desbanir, expulsar, dar personagem e códigos, avisos e anotações.
+   Só o DONO (Donodojogo) apaga contas, zera/edita stats e troca senhas. Quem pode usar: ADMIN_NICKS + DEV_NICKS. */
+const DEV_CODE = String(process.env.DEV_CODE || 'DSVVDCP');
+const DEV_NICKS = (process.env.DEV_NICKS || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+const GIVE_CODES = ['TURBO', 'TEMPO90', 'OURO', 'GELO'];
 const ADMIN_MS = 60 * 60 * 1000;
 const ONLINE_MS = 2 * 60 * 1000;
 const normCode = (x) => String(x || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, '');
 const INDEX = [path.join(__dirname, 'index.html'), path.join(__dirname, 'public', 'index.html')].find((f) => fs.existsSync(f)) || path.join(__dirname, 'index.html');
 
-let db = { users: {}, sessions: {}, log: [], broadcast: null };
+let db = { users: {}, sessions: {}, log: [], broadcast: null, devs: [] };
 
 /* ---------- armazenamento ---------- */
 async function upstash(cmd) {
@@ -44,7 +49,7 @@ async function loadDb() {
   else if (fs.existsSync(DB_FILE)) raw = fs.readFileSync(DB_FILE, 'utf8');
   if (raw) {
     const d = JSON.parse(raw);
-    if (d && typeof d === 'object') db = { users: d.users || {}, sessions: d.sessions || {}, log: Array.isArray(d.log) ? d.log : [], broadcast: d.broadcast || null };
+    if (d && typeof d === 'object') db = { users: d.users || {}, sessions: d.sessions || {}, log: Array.isArray(d.log) ? d.log : [], broadcast: d.broadcast || null, devs: Array.isArray(d.devs) ? d.devs.filter((x) => typeof x === 'string') : [] };
   }
   pruneSessions();
 }
@@ -201,6 +206,7 @@ function unauth(req, res) {
 
 /* ---------- painel de admin ---------- */
 const isAdminLk = (lk) => ADMIN_NICKS.includes(lk);
+const isDevLk = (lk) => DEV_NICKS.includes(lk) || db.devs.includes(lk);
 function addLog(by, a, target, detail) {
   db.log.push({ t: Date.now(), by, a, target: target || '', detail: String(detail || '').slice(0, 160) });
   if (db.log.length > 300) db.log.splice(0, db.log.length - 300);
@@ -215,27 +221,32 @@ function rowOf(u) {
     nick: u.nick, created: u.created, seen: u.seen || 0,
     online: !!u.seen && Date.now() - u.seen < ONLINE_MS,
     games: t.games, points: t.points, wins: t.wins, best: (u.profile && u.profile.best) || 0,
-    banned: !!banOf(u), owner: isAdminLk(u.nick.toLowerCase()),
+    banned: !!banOf(u), owner: isAdminLk(u.nick.toLowerCase()), dev: isDevLk(u.nick.toLowerCase()),
   };
 }
 async function admin(req, res, pathname, ip) {
   const a = authed(req);
-  if (!a || !isAdminLk(a.lk)) return send(res, 404, { error: 'Não encontrado.' });
+  if (!a || !(isAdminLk(a.lk) || isDevLk(a.lk))) return send(res, 404, { error: 'Não encontrado.' });
   const me = a.user.nick;
 
   if (pathname === '/api/admin/unlock' && req.method === 'POST') {
     const key = 'adm|' + a.lk + '|' + ip;
     if (limited(key, 6, 10 * 60e3, false)) return send(res, 429, { error: 'Muitas tentativas. Espere alguns minutos.' });
     const b = await readBody(req, 1024);
-    if (!safeEq(normCode(b.code), normCode(ADMIN_CODE))) {
+    const c = normCode(b.code);
+    let role = null;
+    if (isAdminLk(a.lk) && safeEq(c, normCode(ADMIN_CODE))) role = 'owner';
+    else if (safeEq(c, normCode(DEV_CODE))) role = 'dev';
+    if (!role) {
       limited(key, 6, 10 * 60e3, true);
       return send(res, 404, { error: 'Código inválido.' });
     }
     clearHits(key);
     a.sess.adm = Date.now() + ADMIN_MS;
-    addLog(me, 'login', '', '');
+    a.sess.role = role;
+    addLog(me, 'login', '', role === 'owner' ? 'dono' : 'desenvolvedor');
     persist();
-    return send(res, 200, { ok: true, exp: a.sess.adm });
+    return send(res, 200, { ok: true, exp: a.sess.adm, role, grant: isAdminLk(a.lk) });
   }
   if (!(a.sess.adm > Date.now())) return send(res, 403, { error: 'Painel trancado. Resgate o código de novo.', locked: true });
   a.sess.adm = Date.now() + ADMIN_MS; /* renova enquanto estiver usando */
@@ -282,12 +293,20 @@ async function admin(req, res, pathname, ip) {
     const { lk, u } = f;
     const sessions = Object.values(db.sessions).filter((s) => s.lk === lk && s.exp > Date.now()).length;
     return send(res, 200, {
-      nick: u.nick, created: u.created, seen: u.seen || 0, rev: u.rev, owner: isAdminLk(lk),
+      nick: u.nick, created: u.created, seen: u.seen || 0, rev: u.rev, owner: isAdminLk(lk), dev: isDevLk(lk),
       online: !!u.seen && Date.now() - u.seen < ONLINE_MS,
       profile: u.profile, ban: banOf(u) || null, note: u.note || '', sessions,
     });
   }
 
+  if (pathname === '/api/admin/devs' && req.method === 'GET') {
+    if (!isAdminLk(a.lk)) return send(res, 403, { error: 'Só o dono vê quem é desenvolvedor.' });
+    const all = [...new Set([...DEV_NICKS, ...db.devs])].filter((lk) => !isAdminLk(lk));
+    return send(res, 200, { devs: all.map((lk) => {
+      const u = db.users[lk];
+      return { nick: u ? u.nick : lk, exists: !!u, env: DEV_NICKS.includes(lk), seen: u ? u.seen || 0 : 0 };
+    }) });
+  }
   if (pathname === '/api/admin/log' && req.method === 'GET') return send(res, 200, { log: db.log.slice(-120).reverse() });
 
   if (pathname === '/api/admin/broadcast' && req.method === 'GET') {
@@ -312,7 +331,28 @@ async function admin(req, res, pathname, ip) {
   if (!f) return send(res, 404, { error: 'Conta não encontrada.' });
   const { lk, u } = f;
   const action = pathname.slice('/api/admin/'.length);
-  if (isAdminLk(lk) && !['setpass', 'note'].includes(action)) return send(res, 400, { error: 'Contas de dono são protegidas.' });
+  const owner = a.sess.role === 'owner';
+  if (action === 'devgrant' || action === 'devrevoke') {
+    if (!isAdminLk(a.lk)) return send(res, 403, { error: 'Só o dono pode conceder acesso de desenvolvedor.' });
+    if (isAdminLk(lk)) return send(res, 400, { error: 'Essa conta já é de dono.' });
+    if (action === 'devgrant') {
+      if (isDevLk(lk)) return send(res, 400, { error: 'Essa conta já é desenvolvedora.' });
+      db.devs.push(lk);
+      addLog(me, 'devgrant', u.nick, '');
+    } else {
+      if (DEV_NICKS.includes(lk)) return send(res, 400, { error: 'Esse acesso vem do servidor (DEV_NICKS). Tire por lá.' });
+      if (!db.devs.includes(lk)) return send(res, 400, { error: 'Essa conta não é desenvolvedora.' });
+      db.devs = db.devs.filter((x) => x !== lk);
+      for (const k of Object.keys(db.sessions)) if (db.sessions[k].lk === lk) { delete db.sessions[k].adm; delete db.sessions[k].role; }
+      addLog(me, 'devrevoke', u.nick, '');
+    }
+    persist();
+    return send(res, 200, { ok: true });
+  }
+  if (['delete', 'reset', 'edit', 'setpass'].includes(action) && !owner) return send(res, 403, { error: 'Só o dono pode fazer isso.' });
+  if (isAdminLk(lk) && !((owner || lk === a.lk) && ['setpass', 'note', 'setchar', 'setcodes'].includes(action))) return send(res, 400, { error: 'Contas de dono são protegidas.' });
+  if (isDevLk(lk) && !owner && lk !== a.lk && !['note'].includes(action)) return send(res, 400, { error: 'Só o dono mexe em contas de desenvolvedor.' });
+  if (isDevLk(lk) && lk === a.lk && ['ban', 'unban', 'kick', 'delete'].includes(action)) return send(res, 400, { error: 'Você não pode fazer isso na sua própria conta.' });
 
   if (action === 'ban') {
     const hours = int(b.hours, 0, 24 * 365);
@@ -323,7 +363,7 @@ async function admin(req, res, pathname, ip) {
   } else if (action === 'kick') {
     dropSessions(lk); addLog(me, 'kick', u.nick, '');
   } else if (action === 'delete') {
-    dropSessions(lk); delete db.users[lk]; addLog(me, 'delete', u.nick, '');
+    dropSessions(lk); delete db.users[lk]; db.devs = db.devs.filter((x) => x !== lk); addLog(me, 'delete', u.nick, '');
   } else if (action === 'reset') {
     u.profile = Object.assign(newProfile(), { char: u.profile.char }); u.rev++; dropSessions(lk);
     addLog(me, 'reset', u.nick, '');
@@ -340,6 +380,17 @@ async function admin(req, res, pathname, ip) {
     u.salt = salt.toString('hex'); u.hash = (await scrypt(pass, salt)).toString('hex');
     if (lk !== a.lk) dropSessions(lk);
     addLog(me, 'setpass', u.nick, '');
+  } else if (action === 'setchar') {
+    const ch = String(b.char || '');
+    if (!/^[a-z0-9_-]{1,24}$/.test(ch)) return send(res, 400, { error: 'Personagem inválido.' });
+    u.profile.char = ch; u.rev++;
+    addLog(me, 'setchar', u.nick, ch);
+  } else if (action === 'setcodes') {
+    const list = Array.isArray(b.codes) ? [...new Set(b.codes.map(String))] : [];
+    if (list.some((c) => !GIVE_CODES.includes(c))) return send(res, 400, { error: 'Código inválido na lista.' });
+    if (list.includes('OURO') && list.includes('GELO')) return send(res, 400, { error: 'Escolha só uma cor: OURO ou GELO.' });
+    u.profile.codes = list; u.rev++;
+    addLog(me, 'setcodes', u.nick, list.join(', ') || 'nenhum');
   } else if (action === 'note') {
     u.note = String(b.note || '').slice(0, 300);
     addLog(me, 'note', u.nick, u.note.slice(0, 60));
@@ -408,7 +459,7 @@ async function api(req, res, pathname) {
       const a = authed(req);
       if (!a) return unauth(req, res);
       const bc = db.broadcast && db.broadcast.exp > Date.now() ? { id: db.broadcast.id, text: db.broadcast.text } : null;
-      return send(res, 200, { bc });
+      return send(res, 200, { bc, rev: a.user.rev });
     }
     if (pathname.startsWith('/api/admin/')) return admin(req, res, pathname, ip);
     if (pathname === '/api/logout' && req.method === 'POST') {

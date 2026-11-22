@@ -317,6 +317,15 @@ div.ad-row{cursor:default}
 .ad-mrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 #bcast{position:fixed;top:max(10px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:150;max-width:min(92vw,460px);padding:11px 16px;font:600 17px/1.25 var(--body);color:var(--ink);background:#ffd27a;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.5);text-align:center;cursor:pointer}
 #bcast small{display:block;font:700 12px var(--display);letter-spacing:.16em;text-transform:uppercase;opacity:.7}
+
+.ad-tabs{grid-template-columns:repeat(5,1fr)}.ad-tabs button{font-size:14px;letter-spacing:.03em}
+.ad-sw{padding:3px 9px;font:700 13px var(--display);letter-spacing:.1em;border-radius:6px;background:rgba(244,239,228,.15)}
+.ad-sw.on{background:var(--good);color:var(--ink)}
+.ad-mbox label.ad-chk{display:flex;align-items:center;margin:8px 0 0;font-size:15px;opacity:1}
+.ad-chk input{width:22px;height:22px;margin:0 10px 0 0;flex:none}
+#devFps{position:fixed;left:50%;bottom:4px;transform:translateX(-50%);z-index:150;padding:2px 8px;font:700 13px var(--display);letter-spacing:.08em;color:var(--good);background:rgba(8,13,24,.7);border-radius:6px;pointer-events:none}
+#devFps[hidden]{display:none}
+.ad-tag.dev{background:#8fbcff}
 </style>
 
 <div id="stage" tabindex="0" aria-label="Quadra de basquete em 3D">
@@ -844,7 +853,7 @@ let stealId=0;
 const STEAL_T=0.5,STEAL_HIT=0.2,DRIB_T=0.45;
 function doSteal(){
   if(state!=='playing'||stealCool>0||charging||ball.held)return;
-  stealT=STEAL_T;stealCool=0.75;stealDone=false;stealWon=false;stealId++;player.kick=0.03;
+  stealT=STEAL_T;stealCool=(DEV.on&&DEV.nocd)?0:0.75;stealDone=false;stealWon=false;stealId++;player.kick=0.03;
   noise(0.2,0.12,1400);try{tone(420,150,0.2,'sawtooth',0.05);}catch(e){}
 }
 function placeArm(arm,hand,ax,ay,az){
@@ -1314,6 +1323,10 @@ function doDunk(){
 const RK_CD=10,RK_FUSE=1.4,RK_SPEED=9;
 /* Nerd: anda 15% mais devagar, mas a faixa verde (arremesso perfeito) é 50% maior */
 const NERD_SPD=0.85,NERD_SWEET=1.5;
+/* Opções de desenvolvedor (código DSVVDCP): só valem na sua tela e a partida deixa de contar pontos */
+const DEV={on:false,spd:1,aim:false,nocd:false,time:0,fps:false};
+function devActive(){return DEV.on&&(DEV.spd!==1||DEV.aim||DEV.nocd||DEV.time>0);}
+function devReset(){DEV.on=false;DEV.spd=1;DEV.aim=false;DEV.nocd=false;DEV.time=0;DEV.fps=false;try{devFps(false);}catch(e){}}
 const btnRocket=el('btnRocket'),rkLbl=el('rkLbl'),rkHudEl=el('rkHud');
 let rk=null,rkCool=0,rkGlowT=0,rkBlink=0,rkBotT=0,rkBotDur=1,rkBotPh=0;
 const rkMesh=new T.Group();
@@ -1361,7 +1374,7 @@ function doRocket(){
   if(state!=='playing'||charId!=='fogueteiro'||rkCool>0||rk||timeUp||player.dunkT>=0)return;
   const cp=Math.cos(player.pitch),fx=-Math.sin(player.yaw)*cp,fy=Math.sin(player.pitch),fz=-Math.cos(player.yaw)*cp;
   rk={p:new T.Vector3(player.pos.x+fx*0.6,EYE-0.15,player.pos.z+fz*0.6),v:new T.Vector3(fx*RK_SPEED,fy*RK_SPEED+2.5,fz*RK_SPEED),t:0};
-  rkCool=RK_CD;rkMesh.visible=true;rkMesh.position.copy(rk.p);
+  rkCool=(DEV.on&&DEV.nocd)?0:RK_CD;rkMesh.visible=true;rkMesh.position.copy(rk.p);
   player.kick=0.03;
   noise(0.18,0.12,1200);try{tone(260,700,0.3,'sawtooth',0.04);}catch(e){}
 }
@@ -1447,7 +1460,7 @@ function shoot(power){
   const info=aimInfo(p0.x,p0.z,p0.y,player.yaw,player.pitch);
   let yawEff=player.yaw;
   const s=5+power*10.5,d=Math.abs(s-info.v);
-  const tol=0.6*(charId==='nerd'?NERD_SWEET:1);
+  const tol=(DEV.on&&DEV.aim)?99:0.6*(charId==='nerd'?NERD_SWEET:1);
   const k=0.15+0.85*clamp((d-tol)/2.4,0,1);
   const speed=info.v+(s-info.v)*k;
   const c=Math.cos(info.th);
@@ -1631,7 +1644,7 @@ function updatePlayer(dt){
   if(dunking){f=0;s=0;}
   const len=Math.hypot(f,s);
   if(len>1){f/=len;s/=len;}
-  const sp=((keys.ShiftLeft||keys.ShiftRight)?6.2:4.2)*(charId==='nerd'?NERD_SPD:1)*(charging?0.5:1)*dribSpd*(dribBoostT>0?DR_BOOST:1);
+  const sp=((keys.ShiftLeft||keys.ShiftRight)?6.2:4.2)*(charId==='nerd'?NERD_SPD:1)*(DEV.on?DEV.spd:1)*(charging?0.5:1)*dribSpd*(dribBoostT>0?DR_BOOST:1);
   const fx=-Math.sin(player.yaw),fz=-Math.cos(player.yaw),rx=Math.cos(player.yaw),rz=-Math.sin(player.yaw);
   let vx=(fx*f+rx*s)*sp,vz=(fz*f+rz*s)*sp;
   if(dribT>0){dribT=Math.max(0,dribT-dt);const q=dribT/DRIB_T;vx+=dribVx*q;vz+=dribVz*q;}
@@ -1852,15 +1865,16 @@ function toMenu(){
 function endGame(){
   rkReset();
   state='over';charging=false;charge=0;
-  const isVs=mode==='vs',newBest=!isVs&&stats.score>best&&stats.score>0;
+  const isVs=mode==='vs',cheat=devActive(),newBest=!cheat&&!isVs&&stats.score>best&&stats.score>0;
   if(newBest)best=stats.score;
-  if(prof){
+  if(prof&&!cheat){
     const t=prof.totals||(prof.totals=zeroTotals());
     t.games++;t.points+=stats.score;t.made+=stats.made;t.att+=stats.att;t.threes+=stats.threes;t.streak=Math.max(t.streak,stats.best);
     if(isVs){if(stats.score>botScore)t.wins++;else if(stats.score<botScore)t.losses++;else t.ties++;}
   }
   saveProfile(true);
   sfx.buzzer();
+  if(cheat)showBcast('Modo teste ligado: esta partida não conta para pontos, recorde nem estatísticas.','Opções de desenvolvedor');
   try{document.exitPointerLock();}catch(e){}
   renderCard('over',{score:stats.score,made:stats.made,att:stats.att,threes:stats.threes,best:stats.best,newBest:newBest,vs:isVs,bot:botScore,diff:difficulty,team:team});
   overlay.hidden=false;
@@ -2044,7 +2058,7 @@ const SKINS={OURO:{hero:0xe8b923,ball:0xffd27a,emis:0x6a4a00},GELO:{hero:0x7fd6f
 let activeCodes=[],codeMsg='',codeMsgCls='';
 function saveCodes(){saveProfile();}
 function codeOn(n){return activeCodes.indexOf(n)>=0;}
-function matchTime(){return codeOn('TEMPO90')?90:60;}
+function matchTime(){if(DEV.on&&DEV.time)return DEV.time;return codeOn('TEMPO90')?90:60;}
 function skinInfo(){for(const k in SKINS)if(codeOn(k))return SKINS[k];return null;}
 function isTyping(e){const t=e.target;return !!(t&&((t.tagName==='INPUT'&&(t.type==='text'||t.type==='password'))||t.tagName==='TEXTAREA'));}
 function applyCodes(){
@@ -2216,7 +2230,7 @@ function applyProfile(d){
   applyCodes();applyCfg();
 }
 function resetLocal(){
-  user=null;prof=null;token=null;dirty=false;clearTimeout(saveT);clearInterval(pingT);closeAdmin();
+  user=null;prof=null;token=null;dirty=false;clearTimeout(saveT);clearInterval(pingT);closeAdmin();devReset();
   try{localStorage.removeItem(SES_KEY);}catch(e){}
   best=0;charId=CHARACTERS[0].id;applyHeroChar();activeCodes=[];Object.assign(cfg,CFG_DEF);muted=false;syncSndBtn();
   mode='timed';difficulty='normal';team='A';
@@ -2280,10 +2294,10 @@ el('lbOut').addEventListener('click',function(){audio();logout();});
 
 /* ---------- avisos do dono + ping (online / banimento ao vivo) ---------- */
 let pingT=0,lastBc='';
-function showBcast(text){
+function showBcast(text,title){
   let b=document.getElementById('bcast');if(b)b.remove();
   b=document.createElement('div');b.id='bcast';
-  const s=document.createElement('small');s.textContent='Aviso do dono';b.appendChild(s);
+  const s=document.createElement('small');s.textContent=title||'Aviso do dono';b.appendChild(s);
   b.appendChild(document.createTextNode(text));
   b.addEventListener('click',function(){b.remove();});
   document.body.appendChild(b);
@@ -2295,11 +2309,20 @@ async function doPing(){
   if(r.status===401){sessionLost(r.data&&r.data.banned?r.data.error:'');return;}
   const bc=r.data&&r.data.bc;
   if(bc&&bc.id!==lastBc){lastBc=bc.id;showBcast(bc.text);}
+  const sr=r.data&&r.data.rev;
+  if(prof&&sr>prof.rev&&!saving&&!dirty&&state!=='playing'&&state!=='paused'){
+    const g=await api('GET','/api/profile');
+    if(g.status===200&&g.data&&g.data.profile&&!saving&&!dirty&&state!=='playing'&&state!=='paused'){
+      prof=g.data.profile;applyProfile(prof);
+      if(!lobbyEl.hidden)showLobby();
+      showBcast('Seu perfil foi atualizado (personagem ou códigos).','Opções de desenvolvedor');
+    }
+  }
 }
 function startPing(){clearInterval(pingT);pingT=setInterval(doPing,45000);setTimeout(doPing,2500);}
 
 /* ---------- painel do dono (admin) ---------- */
-const AD={tab:'resumo',sel:null,q:'',sort:'recent',cur:null,ask:null,qT:0};
+const AD={tab:'resumo',sel:null,q:'',sort:'recent',cur:null,ask:null,qT:0,role:'owner',canGrant:false};
 let adminEl=null;
 function adEl(){
   if(adminEl)return adminEl;
@@ -2325,8 +2348,8 @@ function adRes(r){
   return r.status>=200&&r.status<300?{ok:true}:{error:(r.data&&r.data.error)||'Erro. Tente de novo.'};
 }
 function adShell(){
-  const tabs=[['resumo','Resumo'],['contas','Contas'],['avisos','Avisos'],['log','Registro']];
-  adEl().innerHTML='<div class="ad-wrap"><div class="ad-top"><div><small>Dono do jogo</small><h2>Painel de admin</h2></div><button type="button" class="ad-x" data-adm="close">Fechar</button></div>'
+  const tabs=[['resumo','Resumo'],['contas','Contas'],['avisos','Avisos'],['log','Registro'],['dev','Dev']];
+  adEl().innerHTML='<div class="ad-wrap"><div class="ad-top"><div><small>'+(AD.role==='owner'?'Dono do jogo':'Desenvolvedor')+'</small><h2>'+(AD.role==='owner'?'Painel de admin':'Opções de dev')+'</h2></div><button type="button" class="ad-x" data-adm="close">Fechar</button></div>'
     +'<div class="ad-tabs">'+tabs.map(function(t){return '<button type="button" data-adm="tab:'+t[0]+'"'+(AD.tab===t[0]?' class="on"':'')+'>'+t[1]+'</button>';}).join('')+'</div>'
     +'<div id="adBody"><p class="ad-muted">Carregando...</p></div></div><div id="adModal" hidden></div>';
   adminEl.scrollTop=0;
@@ -2343,6 +2366,7 @@ function adGo(tab){
     adList();
   }
   else if(tab==='avisos')adAvisos();
+  else if(tab==='dev')adDev();
   else adLog();
 }
 async function adStats(){
@@ -2369,7 +2393,7 @@ async function adList(){
   box.innerHTML='<p class="ad-muted">'+adN(r.data.total)+' conta'+(r.data.total===1?'':'s')+(r.data.total>us.length?' (mostrando '+us.length+')':'')+'</p>'
     +(us.length?us.map(function(u){
       return '<button type="button" class="ad-row" data-adm="user:'+esc(u.nick)+'"><div><b><i class="ad-dot'+(u.online?' on':'')+'"></i>'+esc(u.nick)+'</b>'
-        +(u.owner?'<em class="ad-tag own">DONO</em>':'')+(u.banned?'<em class="ad-tag">BAN</em>':'')
+        +(u.owner?'<em class="ad-tag own">DONO</em>':'')+(u.dev&&!u.owner?'<em class="ad-tag dev">DEV</em>':'')+(u.banned?'<em class="ad-tag">BAN</em>':'')
         +'<br><span>'+adN(u.games)+' partidas · '+adN(u.points)+' pts · recorde '+adN(u.best)+'</span></div><span>'+(u.online?'online':adAgo(u.seen||u.created))+'</span></button>';
     }).join(''):'<p class="ad-muted">Nenhuma conta encontrada.</p>');
 }
@@ -2382,18 +2406,19 @@ async function adOpenUser(nick){
   const kv=[['Criada em',adDate(d.created)],['Visto por último',d.online?'online agora':adDate(d.seen)+(d.seen?' ('+adAgo(d.seen)+')':'')],['Partidas',adN(t.games)],['Pontos totais',adN(t.points)],
     ['Acertos / tentativas',adN(t.made)+' / '+adN(t.att)+' ('+pct+')'],['Cestas de 3',adN(t.threes)],['Melhor sequência',adN(t.streak)],['Vitórias · derrotas · empates',adN(t.wins)+' · '+adN(t.losses)+' · '+adN(t.ties)],
     ['Recorde',adN(p.best)+' pts'],['Personagem',esc(p.char||'—')],['Códigos ativos',(p.codes&&p.codes.length)?esc(p.codes.join(', ')):'nenhum'],['Modo · dificuldade',esc((p.mode||'—')+' · '+(p.difficulty||'—'))],['Sessões abertas',adN(d.sessions)]];
-  const prot=d.owner;
+  const prot=d.owner,own=AD.role==='owner',self=String(d.nick).toLowerCase()===String(user.nick).toLowerCase();
+  const bt=function(act,txt,cls){return '<button type="button" class="ad-b'+(cls?' '+cls:'')+'" data-adm="act:'+act+'">'+txt+'</button>';};
   adBody('<button type="button" class="ad-b" data-adm="back">← Contas</button>'
-    +'<div class="ad-hd"><h3>'+esc(d.nick)+'</h3>'+(d.online?'<em class="ad-tag live">ONLINE</em>':'')+(d.owner?'<em class="ad-tag own">DONO</em>':'')+(b?'<em class="ad-tag">BANIDO</em>':'')+'</div>'
+    +'<div class="ad-hd"><h3>'+esc(d.nick)+'</h3>'+(d.online?'<em class="ad-tag live">ONLINE</em>':'')+(d.owner?'<em class="ad-tag own">DONO</em>':'')+(d.dev&&!d.owner?'<em class="ad-tag dev">DEV</em>':'')+(b?'<em class="ad-tag">BANIDO</em>':'')+'</div>'
     +(b?'<div class="ad-ban"><b>Banido '+(b.until?'até '+adDate(b.until):'permanentemente')+'</b><br>'+(b.reason?'Motivo: '+esc(b.reason)+'<br>':'')+'<span class="ad-muted">Por '+esc(b.by||'?')+' em '+adDate(b.at)+'</span></div>':'')
     +'<table class="ad-kv">'+kv.map(function(x){return '<tr><td>'+x[0]+'</td><td>'+x[1]+'</td></tr>';}).join('')+'</table>'
     +'<div class="ad-acts">'
-    +(prot?'':(b?'<button type="button" class="ad-b ok" data-adm="act:unban">Desbanir</button>':'<button type="button" class="ad-b bad" data-adm="act:ban">Banir</button>')
-      +'<button type="button" class="ad-b" data-adm="act:kick">Expulsar agora</button>'
-      +'<button type="button" class="ad-b" data-adm="act:edit">Editar stats</button>'
-      +'<button type="button" class="ad-b" data-adm="act:reset">Zerar stats</button>')
-    +'<button type="button" class="ad-b" data-adm="act:setpass">Trocar senha</button>'
-    +(prot?'':'<button type="button" class="ad-b bad" data-adm="act:delete">Apagar conta</button>')
+    +(prot?'':(b?bt('unban','Desbanir','ok'):bt('ban','Banir','bad'))+bt('kick','Expulsar agora'))
+    +((!prot||own||self)?bt('setchar','Dar personagem')+bt('setcodes','Dar códigos'):'')
+    +((!prot&&own)?bt('edit','Editar stats')+bt('reset','Zerar stats'):'')
+    +(own?bt('setpass','Trocar senha'):'')
+    +((!prot&&own)?bt('delete','Apagar conta','bad'):'')
+    +((!prot&&AD.canGrant)?(d.dev?bt('devrevoke','Remover dev','bad'):bt('devgrant','Conceder dev','ok')):'')
     +'</div><p class="ad-h">Anotação do admin (só você vê)</p><textarea id="adNote" maxlength="300" placeholder="Ex: suspeito de trapaça, amigo, etc.">'+esc(d.note||'')+'</textarea>'
     +'<div class="ad-acts" style="margin-top:8px"><button type="button" class="ad-b ok" data-adm="note-save">Salvar anotação</button></div>');
 }
@@ -2406,7 +2431,7 @@ async function adAvisos(){
     +'<div class="ad-acts" style="margin-top:10px"><button type="button" class="ad-b ok" data-adm="bc-send">Enviar aviso</button></div>'
     +'<p class="ad-muted">O aviso aparece no topo da tela de quem estiver jogando (chega em até 45 segundos) e de quem entrar enquanto ele estiver no ar.</p>');
 }
-const AD_LOG={login:'abriu o painel',ban:'baniu',unban:'desbaniu',kick:'expulsou',delete:'apagou a conta de',reset:'zerou os stats de',edit:'editou os stats de',setpass:'trocou a senha de',note:'anotou sobre',broadcast:'enviou um aviso',bcclear:'removeu o aviso'};
+const AD_LOG={devgrant:'deu acesso de desenvolvedor a',devrevoke:'tirou o acesso de desenvolvedor de',setchar:'deu personagem a',setcodes:'deu códigos a',login:'abriu o painel',ban:'baniu',unban:'desbaniu',kick:'expulsou',delete:'apagou a conta de',reset:'zerou os stats de',edit:'editou os stats de',setpass:'trocou a senha de',note:'anotou sobre',broadcast:'enviou um aviso',bcclear:'removeu o aviso'};
 async function adLog(){
   const r=await adm('GET','/api/admin/log');
   if(r.status!==200||!r.data)return adBody('<p class="ad-muted">Não foi possível carregar.</p>');
@@ -2417,6 +2442,7 @@ function adAsk(o){
   const m=adEl().querySelector('#adModal');if(!m)return;
   m.innerHTML='<div class="ad-mbox"><h3>'+esc(o.title)+'</h3>'+(o.text?'<p>'+esc(o.text)+'</p>':'')
     +(o.fields||[]).map(function(f){
+      if(f.checks)return '<p class="ad-h" style="margin:12px 0 0">'+esc(f.label)+'</p>'+f.checks.map(function(op){return '<label class="ad-chk"><input type="checkbox" id="adf-'+f.id+'-'+op[0]+'"'+((f.value||[]).indexOf(op[0])>=0?' checked':'')+'>'+esc(op[1])+'</label>';}).join('');
       return '<label>'+esc(f.label)+(f.opts
         ?'<select id="adf-'+f.id+'">'+f.opts.map(function(op){return '<option value="'+esc(op[0])+'"'+(String(op[0])===String(f.value)?' selected':'')+'>'+esc(op[1])+'</option>';}).join('')+'</select>'
         :'<input id="adf-'+f.id+'" type="text" inputmode="'+(f.num?'numeric':'text')+'" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="'+(f.max||64)+'" value="'+esc(f.value==null?'':f.value)+'" placeholder="'+esc(f.ph||'')+'">')+'</label>';
@@ -2427,7 +2453,7 @@ function adAsk(o){
 }
 async function adAskOk(){
   const o=AD.ask;if(!o)return;
-  const vals={};(o.fields||[]).forEach(function(f){const n=adEl().querySelector('#adf-'+f.id);vals[f.id]=n?n.value:'';});
+  const vals={};(o.fields||[]).forEach(function(f){if(f.checks){vals[f.id]=f.checks.filter(function(op){const c=adEl().querySelector('#adf-'+f.id+'-'+op[0]);return c&&c.checked;}).map(function(op){return op[0];});return;}const n=adEl().querySelector('#adf-'+f.id);vals[f.id]=n?n.value:'';});
   const err=adEl().querySelector('#adErr'),btn=adEl().querySelector('[data-adm="m-ok"]');
   if(btn)btn.disabled=true;
   const res=await o.run(vals);
@@ -2451,6 +2477,12 @@ function adAction(a){
       {id:'wins',label:'Vitórias',num:1,max:8,value:t.wins||0},{id:'losses',label:'Derrotas',num:1,max:8,value:t.losses||0},{id:'ties',label:'Empates',num:1,max:8,value:t.ties||0}],ok:'Salvar',
       run:async function(v){return adRes(await post('edit',v));},after:again});
   }
+  if(a==='devgrant')return adAsk({title:'Conceder dev a '+n+'?',text:'Ela poderá abrir as opções de desenvolvedor com o código DSVVDCP: banir, dar personagem e códigos, ver contas e mandar avisos. Não apaga conta nem mexe em senha.',ok:'Conceder',run:async function(){return adRes(await post('devgrant'));},after:again});
+  if(a==='devrevoke')return adAsk({title:'Remover dev de '+n+'?',text:'Ela perde o acesso na hora, mesmo com o painel aberto.',ok:'Remover',danger:true,run:async function(){return adRes(await post('devrevoke'));},after:again});
+  if(a==='setchar')return adAsk({title:'Dar personagem a '+n,text:'O personagem dela muda na hora (ela vê o aviso em até 45 s). Ela ainda pode trocar depois.',fields:[{id:'char',label:'Personagem',opts:CHARACTERS.map(function(c){return [c.id,c.name];}),value:(d.profile&&d.profile.char)||CHARACTERS[0].id}],ok:'Dar',
+    run:async function(v){return adRes(await post('setchar',{char:v.char}));},after:again});
+  if(a==='setcodes')return adAsk({title:'Dar códigos a '+n,text:'Marque os códigos ativos na conta dela. Desmarque para tirar.',fields:[{id:'codes',label:'Códigos',checks:[['TURBO','TURBO · +10% de velocidade'],['TEMPO90','TEMPO90 · partidas de 90 s'],['OURO','OURO · bola e personagem dourados'],['GELO','GELO · bola e personagem azul-gelo']],value:(d.profile&&d.profile.codes)||[]}],ok:'Aplicar',
+    run:async function(v){return adRes(await post('setcodes',{codes:v.codes}));},after:again});
   if(a==='setpass')return adAsk({title:'Trocar senha de '+n,fields:[{id:'pass',label:'Nova senha (4 a 64 caracteres)',max:64,ph:'nova senha'}],ok:'Trocar',
     run:async function(v){if(v.pass.length<4)return {error:'A senha precisa ter 4 ou mais caracteres.'};return adRes(await post('setpass',{pass:v.pass}));},after:again});
   if(a==='delete')return adAsk({title:'Apagar a conta '+n+'?',text:'A conta e tudo dela somem para sempre. Digite o nick para confirmar.',fields:[{id:'conf',label:'Nick',max:16,ph:n}],ok:'Apagar',danger:true,
@@ -2460,6 +2492,8 @@ function adInput(e){
   const t=e.target;
   if(t.id==='adQ'){AD.q=t.value.trim();clearTimeout(AD.qT);AD.qT=setTimeout(adList,250);}
   else if(t.id==='adSort'){AD.sort=t.value;adList();}
+  else if(t.id==='adDevSpd'){DEV.spd=Number(t.value)||1;devSet();}
+  else if(t.id==='adDevTime'){DEV.time=Number(t.value)||0;devSet();}
 }
 async function adClick(e){
   const b=e.target.closest('[data-adm]');if(!b)return;
@@ -2472,6 +2506,9 @@ async function adClick(e){
   else if(a.indexOf('tab:')===0)adGo(a.slice(4));
   else if(a.indexOf('user:')===0)adOpenUser(a.slice(5));
   else if(a.indexOf('act:')===0)adAction(a.slice(4));
+  else if(a.indexOf('dev:')===0)devClick(a.slice(4));
+  else if(a==='devgive')adDevGive();
+  else if(a.indexOf('devrm:')===0)adDevRemove(a.slice(6));
   else if(a==='m-cancel'){AD.ask=null;const m=adEl().querySelector('#adModal');if(m)m.hidden=true;}
   else if(a==='m-ok')adAskOk();
   else if(a==='note-save'){
@@ -2486,9 +2523,58 @@ async function adClick(e){
   }
   else if(a==='bc-clear'){await adm('POST','/api/admin/broadcast',{text:''});adAvisos();}
 }
+
+/* ---------- opções de desenvolvedor (ferramentas de teste locais) ---------- */
+let fpsEl=null,fpsN=0,fpsT=0;
+function fpsLoop(t){if(!DEV.fps)return;fpsN++;if(t-fpsT>=500){fpsEl.textContent=Math.round(fpsN*1000/(t-fpsT))+' FPS';fpsN=0;fpsT=t;}requestAnimationFrame(fpsLoop);}
+function devFps(on){
+  DEV.fps=!!on;
+  if(on){if(!fpsEl){fpsEl=document.createElement('div');fpsEl.id='devFps';document.body.appendChild(fpsEl);}fpsEl.hidden=false;fpsN=0;fpsT=performance.now();requestAnimationFrame(fpsLoop);}
+  else if(fpsEl)fpsEl.hidden=true;
+}
+function adDev(){
+  const sw=function(v){return '<span class="ad-sw'+(v?' on':'')+'">'+(v?'LIGADO':'DESLIGADO')+'</span>';};
+  const opt=function(list,cur){return list.map(function(o){return '<option value="'+o[0]+'"'+(Number(o[0])===Number(cur)?' selected':'')+'>'+o[1]+'</option>';}).join('');};
+  adBody('<p class="ad-muted">Ferramentas de teste só para a sua tela. Valem até você sair da conta ou recarregar a página.</p>'
+    +'<div class="ad-row"><b>Velocidade</b><select id="adDevSpd" style="width:auto;min-width:110px">'+opt([[0.5,'0,5x'],[1,'Normal'],[1.5,'1,5x'],[2,'2x'],[3,'3x']],DEV.spd)+'</select></div>'
+    +'<div class="ad-row"><b>Duração da partida</b><select id="adDevTime" style="width:auto;min-width:110px">'+opt([[0,'Padrão'],[15,'15 s'],[30,'30 s'],[120,'120 s'],[300,'300 s'],[600,'600 s']],DEV.time)+'</select></div>'
+    +'<button type="button" class="ad-row" data-adm="dev:aim"><b>Arremesso perfeito sempre</b>'+sw(DEV.aim)+'</button>'
+    +'<button type="button" class="ad-row" data-adm="dev:nocd"><b>Sem recarga (roubo e rojão)</b>'+sw(DEV.nocd)+'</button>'
+    +'<button type="button" class="ad-row" data-adm="dev:fps"><b>Contador de FPS</b>'+sw(DEV.fps)+'</button>'
+    +'<div class="ad-ban" style="border-color:#ffd27a;background:rgba(255,210,122,.08)"><b>Modo teste</b><br>Com velocidade, arremesso perfeito, sem recarga ou duração diferente ligados, a partida <b>não conta</b> para pontos, recorde nem estatísticas.</div>'
+    +'<div class="ad-acts"><button type="button" class="ad-b bad" data-adm="dev:off">Desligar tudo</button><button type="button" class="ad-b ok" data-adm="close">Voltar ao jogo</button></div>'
+    +(AD.canGrant?'<p class="ad-h">Acesso de desenvolvedor</p><div id="adDevs"><p class="ad-muted">Carregando...</p></div><div class="ad-acts" style="margin-top:8px"><button type="button" class="ad-b ok" data-adm="devgive">Conceder a alguém</button></div><p class="ad-muted">Quem receber o acesso abre as opções de dev digitando o código DSVVDCP em Configurações.</p>':''));
+  if(AD.canGrant)adDevList();
+}
+async function adDevList(){
+  const r=await adm('GET','/api/admin/devs');
+  const box=adEl().querySelector('#adDevs');if(!box)return;
+  if(r.status!==200||!r.data){box.innerHTML='<p class="ad-muted">'+esc((r.data&&r.data.error)||'Não foi possível carregar.')+'</p>';return;}
+  const l=r.data.devs;
+  box.innerHTML=l.length?l.map(function(x){
+    return '<div class="ad-row"><div><b>'+esc(x.nick)+'</b><em class="ad-tag dev">DEV</em><br><span>'+(x.exists?(x.env?'definido no servidor (DEV_NICKS)':'visto '+adAgo(x.seen)):'conta não existe mais')+'</span></div>'
+      +(x.env?'':'<button type="button" class="ad-b bad" style="min-height:38px" data-adm="devrm:'+esc(x.nick)+'">Remover</button>')+'</div>';
+  }).join(''):'<p class="ad-muted">Ninguém além de você tem acesso de desenvolvedor.</p>';
+}
+function adDevGive(){
+  adAsk({title:'Conceder dev',text:'Digite o nick exato da conta que vai receber o acesso.',fields:[{id:'nick',label:'Nick',max:16,ph:'nick do jogador'}],ok:'Conceder',
+    run:async function(v){const n=v.nick.trim();if(!n)return {error:'Digite um nick.'};return adRes(await adm('POST','/api/admin/devgrant',{nick:n}));},after:adDev});
+}
+function adDevRemove(n){
+  adAsk({title:'Remover dev de '+n+'?',text:'Ela perde o acesso na hora.',ok:'Remover',danger:true,
+    run:async function(){return adRes(await adm('POST','/api/admin/devrevoke',{nick:n}));},after:adDev});
+}
+function devSet(){try{setText(lbModeName,modeName());}catch(e){}}
+function devClick(k){
+  if(k==='aim')DEV.aim=!DEV.aim;
+  else if(k==='nocd')DEV.nocd=!DEV.nocd;
+  else if(k==='fps')devFps(!DEV.fps);
+  else if(k==='off'){const was=DEV.on;devReset();DEV.on=was;}
+  devSet();adDev();
+}
 async function tryAdminCode(c,raw){
   const r=await api('POST','/api/admin/unlock',{code:c});
-  if(r.status===200&&r.data&&r.data.ok){codeMsg='Painel do dono aberto.';codeMsgCls='ok';renderCard('settings');try{tone(520,880,0.15,'triangle',0.1);}catch(e){}openAdmin();return;}
+  if(r.status===200&&r.data&&r.data.ok){AD.role=r.data.role==='owner'?'owner':'dev';AD.canGrant=!!r.data.grant;DEV.on=true;codeMsg=AD.role==='owner'?'Painel do dono aberto.':'Opções de desenvolvedor abertas.';codeMsgCls='ok';renderCard('settings');try{tone(520,880,0.15,'triangle',0.1);}catch(e){}openAdmin();return;}
   codeMsg=r.status===429?((r.data&&r.data.error)||'Muitas tentativas.'):'Código inválido.';codeMsgCls='err';
   renderCard('settings');const n=card.querySelector('#codeInput');if(n){n.value=raw;n.focus();}
 }
@@ -2657,7 +2743,7 @@ function frame(now){
       setText(vPts,three?'3 pts':'2 pts');vPts.className=three?'three':'';
       const ideal=(info.v-5)/10.5;
       if(ideal>0&&ideal<=1.1){
-        const hw=0.05*(charId==='nerd'?NERD_SWEET:1),a=clamp(ideal-hw,0,1),b=clamp(ideal+hw,0,1);
+        const hw=(DEV.on&&DEV.aim)?0.5:0.05*(charId==='nerd'?NERD_SWEET:1),a=clamp(ideal-hw,0,1),b=clamp(ideal+hw,0,1);
         sweetEl.style.display='block';sweetEl.style.left=(a*100)+'%';sweetEl.style.width=((b-a)*100)+'%';
         btnShoot.style.setProperty('--s',(a*100)+'%');btnShoot.style.setProperty('--e',(b*100)+'%');
       }else{
