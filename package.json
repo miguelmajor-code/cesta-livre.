@@ -1,0 +1,13 @@
+{
+  "name": "cesta-livre",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cesta Livre: jogo de basquete 3D com contas na nuvem",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
