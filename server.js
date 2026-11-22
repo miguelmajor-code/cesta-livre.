@@ -535,9 +535,9 @@ async function api(req, res, pathname) {
       const a = authed(req);
       if (!a) return unauth(req, res);
       const rows = Object.values(db.users)
-        .filter((u) => u.profile && u.profile.best > 0 && !banOf(u))
-        .map((u) => ({ nick: u.nick, best: u.profile.best, char: u.profile.char }))
-        .sort((x, y) => y.best - x.best || x.nick.localeCompare(y.nick))
+        .filter((u) => u.profile && u.profile.totals && u.profile.totals.wins > 0 && !banOf(u))
+        .map((u) => ({ nick: u.nick, wins: u.profile.totals.wins, games: u.profile.totals.games, char: u.profile.char }))
+        .sort((x, y) => y.wins - x.wins || x.games - y.games || x.nick.localeCompare(y.nick))
         .slice(0, 20);
       return send(res, 200, { rows });
     }
