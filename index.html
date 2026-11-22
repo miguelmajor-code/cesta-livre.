@@ -1155,8 +1155,9 @@ function attemptSteal(){
     if(!ball.botHeld)return;
     const dx=bot.x-player.pos.x,dz=bot.z-player.pos.z,d=Math.hypot(dx,dz);
     const fwd=Math.atan2(-dx,-dz),diff=Math.abs(wrapPi(player.yaw-fwd));
-    if(d<(bot.ai.windup?2.3:1.9)&&diff<0.8){
-      if(bot.ai.drGuard>0&&!bot.ai.windup){bot.ai.drBlocked=true;toast('O bot driblou você!','bad');noise(0.1,0.1,2200);return;}
+    const perfect=charId==='serperfeito';
+    if(perfect||(d<(bot.ai.windup?2.3:1.9)&&diff<0.8)){
+      if(!perfect&&bot.ai.drGuard>0&&!bot.ai.windup){bot.ai.drBlocked=true;toast('O bot driblou você!','bad');noise(0.1,0.1,2200);return;}
       if(stealRoll()){
         ball.botHeld=false;bot.ai.cd=2.2;bot.ai.stun=0.7;bot.ai.spot=null;
         grabBall();toast('Roubou!','good');stealFx(dx,dz);
@@ -1168,7 +1169,7 @@ function attemptSteal(){
   if(!bot.hasBall)return;
   const dx=bot.x-player.pos.x,dz=bot.z-player.pos.z,d=Math.hypot(dx,dz);
   const fwd=Math.atan2(-dx,-dz),diff=Math.abs(wrapPi(player.yaw-fwd));
-  if(d<1.9&&diff<0.8){
+  if(charId==='serperfeito'||(d<1.9&&diff<0.8)){
     if(!stealRoll()){toast('O bot te empurrou!','bad');shoveSelf();return;}
     bot.hasBall=false;botBall.visible=false;bot.timer=0.6;
     grabBall();
@@ -1303,18 +1304,18 @@ function nearestHoop(){
   return b;
 }
 function doDribble(){
-  if(state!=='playing'||!ball.held||charging||timeUp||dribCool>0||player.dunkT>=0)return;
+  if(state!=='playing'||!ball.held||charging||timeUp||(dribCool>0&&charId!=='serperfeito')||player.dunkT>=0)return;
   const s=(keys.KeyD?1:0)-(keys.KeyA?1:0)+stick.x;
   dribDir=Math.abs(s)>0.25?Math.sign(s):-dribDir;
   const rx=Math.cos(player.yaw),rz=-Math.sin(player.yaw),fx=-Math.sin(player.yaw),fz=-Math.cos(player.yaw);
   dribVx=rx*dribDir*7+fx*2.5;dribVz=rz*dribDir*7+fz*2.5;
-  dribT=DRIB_T;dribCool=1.0+dribPen;dribGuard=0.7;dribSnd=0;
+  dribT=DRIB_T;dribCool=charId==='serperfeito'?0:1.0+dribPen;dribGuard=0.7;dribSnd=0;
   player.fovPunch=Math.max(player.fovPunch,0.3);
   noise(0.15,0.1,2000);
   if(mode==='vs'&&bot.g.visible){
     const d=Math.hypot(bot.x-player.pos.x,bot.z-player.pos.z);
     if(d<2.4){
-      if(Math.random()<({easy:1,normal:0.75,hard:0.5})[difficulty]){
+      if(charId==='serperfeito'||Math.random()<({easy:1,normal:0.75,hard:0.5})[difficulty]){
         bot.ai.stun=Math.max(bot.ai.stun,0.6);bot.ai.stag=0.35;bot.ai.stagAmp=0.3;
         dribBoostPend=true;toast('Drible! Velocidade extra','good');
       }else{
@@ -1784,7 +1785,7 @@ function renderCard(kind,res){
   }else if(kind==='chars'){
     h='<p class="eyebrow">Personagens</p><h1>Escolha</h1>'
      +'<div class="char-grid" role="group" aria-label="Personagens">'
-     +Array.from({length:CHAR_SLOTS},function(_,i){const c=CHARACTERS[i];return c?'<button type="button" class="char-item" data-act="char-'+c.id+'" aria-pressed="'+(charId===c.id)+'">'+c.name+'</button>':'<button type="button" class="char-item empty" disabled aria-label="Espaço '+(i+1)+' vazio"></button>';}).join('')
+     +Array.from({length:CHAR_SLOTS},function(_,i){const c=charList()[i];return c?'<button type="button" class="char-item" data-act="char-'+c.id+'" aria-pressed="'+(charId===c.id)+'">'+c.name+'</button>':'<button type="button" class="char-item empty" disabled aria-label="Espaço '+(i+1)+' vazio"></button>';}).join('')
      +'</div>'
      +'<button type="button" class="primary" data-act="back">Voltar</button>';
   }else if(kind==='settings'){
@@ -1930,7 +1931,7 @@ function endGame(){
 const lobbyEl=el('lobby'),lbModeName=el('lbModeName');
 const hero=new T.Group();
 const heroMats={jersey:new T.MeshLambertMaterial({color:0xff7a2f}),skin:new T.MeshLambertMaterial({color:0xd9a273})};
-const fogG=new T.Group(),nerdG=new T.Group(),heroArms=[];hero.add(fogG);hero.add(nerdG);nerdG.visible=false;
+const fogG=new T.Group(),nerdG=new T.Group(),perfG=new T.Group(),heroArms=[];hero.add(fogG);hero.add(nerdG);hero.add(perfG);nerdG.visible=false;perfG.visible=false;
 (function(){
   /* base: modelo dos NPCs da torcida (corpo cilíndrico + cabeça esférica, escala 2x, como o bot) */
   const k=2.0;
@@ -2040,6 +2041,29 @@ const fogG=new T.Group(),nerdG=new T.Group(),heroArms=[];hero.add(fogG);hero.add
     }
   })();
 })();
+/* Ser Perfeito: corpo dourado-claro, auréola, brilho e sorriso sereno */
+(function(){
+  const k=2.0,HY=0.76*k,R=0.13*k;
+  const dark=new T.MeshBasicMaterial({color:0x2a2218}),gold=new T.MeshBasicMaterial({color:0xffd76a});
+  const halo=new T.Mesh(new T.TorusGeometry(0.2,0.022,10,40),gold);halo.rotation.x=Math.PI/2;halo.position.y=HY+R+0.22;perfG.add(halo);
+  for(const sx of [-1,1]){
+    const eye=new T.Mesh(new T.SphereGeometry(0.02,10,8),dark);
+    eye.position.set(sx*0.09,HY+0.02,Math.sqrt(R*R-0.09*0.09-0.02*0.02)+0.004);perfG.add(eye);
+  }
+  const sm=new T.Mesh(new T.TorusGeometry(0.06,0.008,6,20,Math.PI),dark);sm.rotation.z=Math.PI;sm.position.set(0,HY-0.075,R-0.012);perfG.add(sm);
+  const aura=new T.Sprite(new T.SpriteMaterial({map:glowTex,color:0xfff2b0,transparent:true,opacity:0.4,depthWrite:false,blending:T.AdditiveBlending}));
+  aura.scale.set(3.4,3.4,1);aura.position.y=1.1;perfG.add(aura);
+  const lm=function(p0,p1,r,mat){
+    const d=new T.Vector3().subVectors(p1,p0),m=new T.Mesh(new T.CylinderGeometry(r,r,d.length(),20),mat);
+    m.position.copy(p0).addScaledVector(d,0.5);m.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),d.clone().normalize());perfG.add(m);
+  };
+  for(const sx of [-1,1]){
+    const sh=new T.Vector3(sx*0.5,1.14,0),hd=new T.Vector3(sx*0.61,0.33,0),cut=sh.clone().lerp(hd,0.42);
+    lm(sh,cut,0.125,heroMats.jersey);lm(cut,hd,0.085,heroMats.skin);
+    const sp=new T.Mesh(new T.SphereGeometry(0.125,20,14),heroMats.jersey);sp.position.copy(sh);perfG.add(sp);
+    const hand=new T.Mesh(new T.SphereGeometry(0.1,18,12),heroMats.skin);hand.position.copy(hd);perfG.add(hand);
+  }
+})();
 const heroWrap=new T.Group();heroWrap.add(hero);
 // pedestal e brilho
 const ped=new T.Mesh(new T.CylinderGeometry(1.1,1.2,0.12,48),new T.MeshLambertMaterial({color:0x16223b}));ped.position.y=-0.06;heroWrap.add(ped);
@@ -2048,7 +2072,7 @@ const glow=new T.Mesh(new T.CircleGeometry(2.3,48),new T.MeshBasicMaterial({colo
 heroWrap.position.set(0,0,0);heroWrap.visible=false;
 scene.add(heroWrap);
 function lobbyColors(){
-  const sk=skinInfo(),c=(sk&&mode!=='vs')?sk.hero:(mode==='vs'?(team==='A'?0x3b8bd9:0xd94a4a):0xff7a2f);
+  const sk=skinInfo(),c=(sk&&mode!=='vs')?sk.hero:(mode==='vs'?(team==='A'?0x3b8bd9:0xd94a4a):baseCol());
   heroMats.jersey.color.setHex(c);ring.material.color.setHex(c);glow.material.color.setHex(c);
 }
 function showLobby(){
@@ -2068,18 +2092,21 @@ el('lbModes').addEventListener('click',function(){audio();lobbyEl.hidden=true;he
 
 
 /* ---------- personagens ---------- */
-const CHARACTERS=[{id:'fogueteiro',name:'Fogueteiro'},{id:'nerd',name:'Nerd'}];
+const CHARACTERS=[{id:'fogueteiro',name:'Fogueteiro'},{id:'nerd',name:'Nerd'},{id:'serperfeito',name:'Ser Perfeito',secret:'ADMINABUSE'}];
+function charUnlocked(id){const c=CHARACTERS.find(function(x){return x.id===id;});return !!c&&(!c.secret||codeOn(c.secret));}
+function charList(){return CHARACTERS.filter(function(c){return !c.secret||codeOn(c.secret);});}
+function baseCol(){return charId==='serperfeito'?0xf5e6a8:0xff7a2f;}
 const CHAR_SLOTS=6;
 let charId=CHARACTERS[0].id;
 function applyHeroChar(){
-  const n=charId==='nerd';
-  fogG.visible=!n;nerdG.visible=n;
+  const n=charId==='nerd',p=charId==='serperfeito';
+  fogG.visible=!n&&!p;nerdG.visible=n;perfG.visible=p;
 }
 /* primeira pessoa: o Nerd tem braço liso com manga, sem as tatuagens do Fogueteiro */
 const nerdArmMat=new T.MeshLambertMaterial({emissive:0x444444});
 function applyFpChar(){
-  if(charId!=='nerd'){armR.material=armMat;armL.material=armMat;return;}
-  const sk=skinInfo(),col=(sk&&mode!=='vs')?sk.hero:(mode==='vs'?(team==='A'?0x3b8bd9:0xd94a4a):0xff7a2f);
+  if(charId!=='nerd'&&charId!=='serperfeito'){armR.material=armMat;armL.material=armMat;return;}
+  const sk=skinInfo(),col=(sk&&mode!=='vs')?sk.hero:(mode==='vs'?(team==='A'?0x3b8bd9:0xd94a4a):baseCol());
   const c=document.createElement('canvas');c.width=64;c.height=320;const g=c.getContext('2d');
   g.fillStyle='#d9a273';g.fillRect(0,0,64,320);                      /* ponta do braço (mão): pele */
   g.fillStyle='#'+('000000'+col.toString(16)).slice(-6);g.fillRect(0,140,64,180);   /* manga */
@@ -2104,7 +2131,7 @@ async function openRank(){
 el('lbRank').addEventListener('click',openRank);
 /* ---------- Passe: salas online ---------- */
 let onl=null,roomPrevMode=null,roomT=0,roomBusy=false,roomSyncing=false,roomMsg='',roomCodeVal='',roomSig='';
-const remotes=new Map(),CHAR_COL={fogueteiro:0xff7a2f,nerd:0x2e9e5b};
+const remotes=new Map(),CHAR_COL={fogueteiro:0xff7a2f,nerd:0x2e9e5b,serperfeito:0xf5e6a8};
 function roomReset(){onl=null;roomPrevMode=null;clearInterval(roomT);roomT=0;roomSyncing=false;roomSig='';clearRemotes();}
 function leaveRoomLocal(){
   if(!onl)return;
@@ -2211,6 +2238,7 @@ el('lbChars').addEventListener('click',function(){audio();lobbyEl.hidden=true;he
 const CODES={
   TURBO:{desc:'Começa cada partida com +10% de velocidade'},
   TEMPO90:{desc:'Rodadas e duelos de 90 segundos'},
+  ADMINABUSE:{desc:'Libera o personagem secreto Ser Perfeito (escolha em Personagem)'},
   OURO:{desc:'Bola e personagem dourados',skin:true},
   GELO:{desc:'Bola e personagem azul-gelo',skin:true},
   ZERARREC:{desc:'Apaga o recorde',once:true},
@@ -2224,6 +2252,7 @@ function matchTime(){if(DEV.on&&DEV.time)return DEV.time;return codeOn('TEMPO90'
 function skinInfo(){for(const k in SKINS)if(codeOn(k))return SKINS[k];return null;}
 function isTyping(e){const t=e.target;return !!(t&&((t.tagName==='INPUT'&&(t.type==='text'||t.type==='password'))||t.tagName==='TEXTAREA'));}
 function applyCodes(){
+  if(!charUnlocked(charId)){charId=CHARACTERS[0].id;if(prof)prof.char=charId;applyHeroChar();}
   const sk=skinInfo(),m=ballMesh.material;
   m.color.setHex(sk?sk.ball:0xffffff);m.emissive.setHex(sk?sk.emis:0x6a2a00);
   lobbyColors();setText(lbModeName,modeName());
@@ -2319,7 +2348,7 @@ card.addEventListener('click',function(e){
   if(a==='mode-timed'||a==='mode-free'||a==='mode-vs'){mode=a==='mode-timed'?'timed':a==='mode-free'?'free':'vs';saveProfile();renderCard('menu');return;}
   if(a.indexOf('diff-')===0){difficulty=a.slice(5);saveProfile();renderCard('menu');return;}
   if(a.indexOf('team-')===0){team=a.slice(5);saveProfile();renderCard('menu');return;}
-  if(a.indexOf('char-')===0){charId=a.slice(5);applyHeroChar();saveProfile();renderCard('chars');return;}
+  if(a.indexOf('char-')===0){if(!charUnlocked(a.slice(5)))return;charId=a.slice(5);applyHeroChar();applyFpChar();saveProfile();renderCard('chars');return;}
   if(a==='back'){showLobby();return;}
   if(a==='room-join'){roomMsg='';renderCard('join');const i=card.querySelector('#roomCode');if(i&&!isTouch)i.focus();return;}
   if(a==='room-create'){createRoom();return;}
@@ -2387,8 +2416,8 @@ window.addEventListener('pagehide',flushBeacon);
 function applyProfile(d){
   if(!d.totals)d.totals=zeroTotals();
   best=+d.best||0;
-  charId=CHARACTERS.some(function(c){return c.id===d.char;})?d.char:CHARACTERS[0].id;applyHeroChar();
   activeCodes=Array.isArray(d.codes)?d.codes.filter(function(c){return CODES[c]&&!CODES[c].once;}):[];
+  charId=charUnlocked(d.char)?d.char:CHARACTERS[0].id;applyHeroChar();
   Object.assign(cfg,CFG_DEF);
   if(d.cfg&&typeof d.cfg==='object')for(const k in CFG_DEF)if(typeof d.cfg[k]===typeof CFG_DEF[k])cfg[k]=d.cfg[k];
   muted=!!d.muted;syncSndBtn();
