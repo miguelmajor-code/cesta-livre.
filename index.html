@@ -235,6 +235,7 @@ body.touch #rkHud{display:none}
 .auth-in{display:block;width:100%;height:54px;margin:0 0 10px;padding:0 14px;font:600 20px var(--display);letter-spacing:.06em;color:var(--chalk);background:var(--ink-2);border:2px solid var(--line);border-radius:10px;-webkit-user-select:text;user-select:text;touch-action:auto;box-sizing:border-box}
 .auth-in::placeholder{color:rgba(244,239,228,.35);letter-spacing:.04em}
 .auth-in:focus{outline:none;border-color:var(--ball)}
+.gold{color:#ffd27a;font-weight:700;text-shadow:0 0 10px rgba(255,210,122,.6)}
 .auth-note{margin:12px 0 0;font-size:12px;line-height:1.4;opacity:.65;text-align:center}
 /* ===== Placar do jogador + bot lado a lado ===== */
 #dribInfo{display:none;top:calc(12px + 76px);left:max(16px,env(safe-area-inset-left,0px));font-size:13px;line-height:1.5;letter-spacing:.08em;text-shadow:0 1px 5px rgba(0,0,0,.85);white-space:nowrap}
@@ -1704,7 +1705,7 @@ function renderCard(kind,res){
     const tog=(act,on,label,sub)=>'<div class="set-row"><span>'+label+(sub?'<small>'+sub+'</small>':'')+'</span><button type="button" class="tog" data-act="'+act+'" role="switch" aria-label="'+label+'" aria-pressed="'+on+'"></button></div>';
     const rng=(key,min,max,step,val,label,sub)=>'<div class="set-row"><span>'+label+(sub?'<small>'+sub+'</small>':'')+'</span><div class="rg"><input type="range" data-set="'+key+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'" aria-label="'+label+'"><output data-out="'+key+'">'+fmtSet(key,val)+'</output></div></div>';
     h='<p class="eyebrow">Configurações</p><h1>Ajustes</h1>'
-     +(user?'<p class="lead">Conta <b>'+esc(user.nick)+'</b> · '+((prof.totals||zeroTotals()).games)+' partidas · '+((prof.totals||zeroTotals()).points)+' pontos no total'+(((prof.totals||zeroTotals()).wins)?' · '+prof.totals.wins+' vitórias':'')+'</p>':'')
+     +(user?'<p class="lead">Conta <b'+(isCreator()?' class="gold"':'')+'>'+(isCreator()?'★ ':'')+esc(user.nick)+'</b>'+(isCreator()?' (criador do jogo)':'')+' · '+((prof.totals||zeroTotals()).games)+' partidas · '+((prof.totals||zeroTotals()).points)+' pontos no total'+(((prof.totals||zeroTotals()).wins)?' · '+prof.totals.wins+' vitórias':'')+'</p>':'')
      +tog('set-sound',!muted,'Som','Efeitos e torcida')
      +tog('set-fs',fsOn,'Tela cheia','Melhor no celular, deitado')
      +rng('sens',0.4,2.2,0.1,cfg.sens,'Sensibilidade','Velocidade da mira')
@@ -1876,7 +1877,7 @@ function showLobby(){
   lobbyColors();
   setText(lbModeName,modeName());
   setText(el('lbCharName'),charName());
-  setText(el('lbBest'),(user?user.nick:'')+(best?(user?' · ':'')+'Recorde: '+best+' pts':''));
+  el('lbBest').innerHTML=(user?(isCreator()?'<b class="gold">★ '+esc(user.nick)+'</b>':esc(user.nick)):'')+(best?(user?' · ':'')+'Recorde: '+best+' pts':'');
   el('lbInfo').innerHTML='<b>Enter</b> arremessar<br><b>M</b> som · <b>P</b> pausa';
   overlay.hidden=true;lobbyEl.hidden=false;stage.classList.add('lobby');
   heroWrap.visible=true;
@@ -2022,6 +2023,7 @@ window.addEventListener('blur',function(){if(state==='playing'&&!isTouch){chargi
 const SES_KEY='cesta-livre-token',NICK_RE=/^[A-Za-z0-9_.-]{3,16}$/;
 let user=null,prof=null,token=null,authTab='login',authMsg='',authNickVal='',authBusy=false;
 let saveT=0,saving=false,dirty=false;
+function isCreator(){return !!user&&String(user.nick).toLowerCase()==='enaljack';}
 function esc(t){return String(t).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function zeroTotals(){return {games:0,points:0,made:0,att:0,threes:0,streak:0,wins:0,losses:0,ties:0};}
 async function api(method,path,body,keepalive){
