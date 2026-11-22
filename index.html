@@ -1853,6 +1853,7 @@ function renderCard(kind,res){
     const pct=res.att?Math.round(res.made/res.att*100):0;
     h='<p class="eyebrow">Fim da rodada</p><div class="big">'+res.score+'</div><p class="lead">pontos'+(res.newBest?' · novo recorde!':'')+'</p>'
      +'<dl class="res"><div><dt>Acertos</dt><dd>'+res.made+'/'+res.att+'</dd></div><div><dt>Aproveitamento</dt><dd>'+pct+'%</dd></div><div><dt>Bolas de três</dt><dd>'+res.threes+'</dd></div><div><dt>Maior sequência</dt><dd>'+res.best+'</dd></div></dl>'
+     +(onl?roomRosterHtml():'')
      +'<button type="button" class="primary" data-act="play">Jogar de novo</button>'
      +'<button type="button" class="ghost" data-act="menu">Menu</button>';
   }
@@ -2149,7 +2150,7 @@ function roomRosterHtml(){
 function openPass(){audio();lobbyEl.hidden=true;heroWrap.visible=true;roomMsg='';renderCard('pass');overlay.hidden=false;}
 el('lbPass').addEventListener('click',openPass);
 function enterRoom(code,players){
-  onl={code:code,players:players||[]};roomPrevMode=mode;mode='free';
+  onl={code:code,players:players||[]};roomPrevMode=mode;mode='timed';
   startGame();lockPointer();
   clearInterval(roomT);roomT=setInterval(roomSync,200);roomSync();
 }
