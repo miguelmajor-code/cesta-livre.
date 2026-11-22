@@ -401,6 +401,49 @@ async function admin(req, res, pathname, ip) {
   return send(res, 200, { ok: true });
 }
 
+/* ---------- salas online (Passe) ---------- */
+/* Salas ficam só na memória do servidor (somem se ele reiniciar). Cada jogador manda a própria posição ~5x/s e recebe a dos outros. */
+const ROOM_MAX = 6, ROOM_DROP = 40e3, ROOM_SEEN = 12e3;
+const ROOM_ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const rooms = new Map(), roomOf = new Map();
+const normRoom = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+function newRoomCode() {
+  for (let i = 0; i < 50; i++) {
+    let c = '';
+    for (let k = 0; k < 5; k++) c += ROOM_ALPHA[crypto.randomInt(ROOM_ALPHA.length)];
+    if (!rooms.has(c)) return c;
+  }
+  return null;
+}
+function roomLeave(lk) {
+  const code = roomOf.get(lk);
+  roomOf.delete(lk);
+  const r = code && rooms.get(code);
+  if (!r) return;
+  r.members.delete(lk);
+  if (!r.members.size) rooms.delete(code);
+}
+function roomJoin(r, lk, nick) {
+  if (roomOf.get(lk) && roomOf.get(lk) !== r.code) roomLeave(lk);
+  r.members.set(lk, { nick, char: 'fogueteiro', score: 0, x: 0, z: 0, y: 0, yaw: 0, t: Date.now() });
+  roomOf.set(lk, r.code);
+}
+function roomPrune(r) {
+  const now = Date.now();
+  for (const [lk, m] of r.members) if (now - m.t > ROOM_DROP) { r.members.delete(lk); if (roomOf.get(lk) === r.code) roomOf.delete(lk); }
+}
+function roomPlayers(r, self) {
+  const now = Date.now(), out = [];
+  for (const [lk, m] of r.members) {
+    if (now - m.t > ROOM_SEEN && lk !== self) continue;
+    out.push({ nick: m.nick, char: m.char, score: m.score, x: m.x, z: m.z, y: m.y, yaw: m.yaw, you: lk === self });
+  }
+  return out;
+}
+setInterval(() => {
+  for (const [c, r] of rooms) { roomPrune(r); if (!r.members.size) rooms.delete(c); }
+}, 30 * 1000).unref();
+
 /* ---------- API ---------- */
 async function api(req, res, pathname) {
   const ip = clientIp(req);
@@ -471,10 +514,55 @@ async function api(req, res, pathname) {
         .slice(0, 20);
       return send(res, 200, { rows });
     }
+    if (pathname.startsWith('/api/room/') && req.method === 'POST') {
+      const a = authed(req);
+      if (!a) return unauth(req, res);
+      const act = pathname.slice('/api/room/'.length);
+      const b = await readBody(req, 1024);
+      if (act === 'create') {
+        if (limited('roomc|' + a.lk, 10, 60e3, true)) return send(res, 429, { error: 'Muitas salas criadas. Espere um pouco.' });
+        roomLeave(a.lk);
+        const code = newRoomCode();
+        if (!code) return send(res, 503, { error: 'Não foi possível criar a sala agora.' });
+        const r = { code, host: a.lk, created: Date.now(), members: new Map() };
+        rooms.set(code, r);
+        roomJoin(r, a.lk, a.user.nick);
+        return send(res, 200, { code });
+      }
+      if (act === 'join') {
+        if (limited('roomj|' + ip, 30, 60e3, true)) return send(res, 429, { error: 'Muitas tentativas. Espere um pouco.' });
+        const code = normRoom(b.code);
+        const r = code ? rooms.get(code) : null;
+        if (!r) return send(res, 404, { error: 'Sala não encontrada. Confira o código.' });
+        roomPrune(r);
+        if (!r.members.has(a.lk) && r.members.size >= ROOM_MAX) return send(res, 409, { error: 'Essa sala está cheia.' });
+        roomJoin(r, a.lk, a.user.nick);
+        return send(res, 200, { code, players: roomPlayers(r, a.lk) });
+      }
+      if (act === 'sync') {
+        const r = rooms.get(roomOf.get(a.lk) || '') || rooms.get(normRoom(b.code));
+        if (!r) return send(res, 404, { error: 'A sala foi encerrada.', gone: true });
+        let m = r.members.get(a.lk);
+        if (!m) {
+          roomPrune(r);
+          if (r.members.size >= ROOM_MAX) return send(res, 404, { error: 'A sala foi encerrada.', gone: true });
+          roomJoin(r, a.lk, a.user.nick);
+          m = r.members.get(a.lk);
+        }
+        m.x = flt(b.x, -30, 30, m.x); m.z = flt(b.z, -30, 30, m.z);
+        m.y = flt(b.y, 0, 4, 0); m.yaw = flt(b.yaw, -1000, 1000, m.yaw);
+        m.char = typeof b.char === 'string' && /^[a-z0-9_-]{1,24}$/.test(b.char) ? b.char : m.char;
+        m.score = int(b.score, 0, 100000);
+        m.t = Date.now();
+        return send(res, 200, { code: r.code, players: roomPlayers(r, a.lk) });
+      }
+      if (act === 'leave') { roomLeave(a.lk); return send(res, 200, { ok: true }); }
+      return send(res, 404, { error: 'Não encontrado.' });
+    }
     if (pathname.startsWith('/api/admin/')) return admin(req, res, pathname, ip);
     if (pathname === '/api/logout' && req.method === 'POST') {
       const a = authed(req);
-      if (a) { delete db.sessions[a.hash]; persist(); }
+      if (a) { delete db.sessions[a.hash]; roomLeave(a.lk); persist(); }
       return send(res, 200, { ok: true });
     }
     return send(res, 404, { error: 'Não encontrado.' });

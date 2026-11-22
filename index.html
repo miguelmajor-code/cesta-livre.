@@ -263,6 +263,11 @@ body.touch #rkHud{display:none}
   #stage.vs #timer{left:auto;right:max(16px,env(safe-area-inset-right,0px));transform:none;min-width:70px}
   #stage.vs #tools{top:calc(12px + 64px)}
 }
+.lb-play{min-height:56px;padding:8px 20px;font-size:clamp(22px,5vw,27px);border-radius:14px;gap:10px;box-shadow:0 5px 0 #b54a10,0 12px 24px rgba(255,122,47,.3)}
+.lb-play svg{width:26px;height:26px}
+.lb-play.alt{background:#7fd6ff;box-shadow:0 5px 0 #3a8fb8,0 12px 24px rgba(127,214,255,.25)}
+.lb-play.alt:active{transform:translateY(4px);box-shadow:0 1px 0 #3a8fb8,0 6px 12px rgba(127,214,255,.2)}
+.room-code{display:inline-block;padding:2px 14px;font:700 30px var(--display);letter-spacing:.22em;color:var(--ink);background:var(--ball);border-radius:8px;-webkit-user-select:text;user-select:text}
 .rank{width:100%;border-collapse:collapse;margin:0 0 16px;font-variant-numeric:tabular-nums}
 .rank th{padding:6px 8px;font:600 12px var(--display);letter-spacing:.16em;text-transform:uppercase;text-align:left;opacity:.65;border-bottom:1px solid var(--line)}
 .rank td{padding:9px 8px;font:600 18px var(--display);letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--line)}
@@ -372,6 +377,7 @@ div.ad-row{cursor:default}
     <div class="lb-left"><div class="lb-info" id="lbInfo"></div><button id="lbRank" class="lb-modes lb-chars" type="button" aria-label="Ver placar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg><span><small>Placar</small><b>Top jogadores</b></span><i aria-hidden="true">&#9656;</i></button><button id="lbChars" class="lb-modes lb-chars" type="button" aria-label="Escolher personagem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span><small>Personagem</small><b id="lbCharName">Fogueteiro</b></span><i aria-hidden="true">&#9656;</i></button></div>
     <div class="lb-actions">
     <button id="lbModes" class="lb-modes" type="button" aria-label="Escolher modo de jogo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span><small>Modos de jogo</small><b id="lbModeName">Rodada 60 s</b></span><i aria-hidden="true">&#9662;</i></button>
+    <button id="lbPass" class="lb-play alt" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.4c2.2.7 3.5 2.6 3.5 5.6"/></svg><span>Passe</span></button>
     <button id="lbPlay" class="lb-play" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3v18M5.6 5.6c3 3 3 10.8 0 12.8M18.4 5.6c-3 3-3 10.8 0 12.8"/></svg><span>Arremessar</span></button>
     </div>
   </div>
@@ -1811,6 +1817,25 @@ function renderCard(kind,res){
         +'</tbody></table></div><p class="lead" style="margin-top:8px">Pontuação = recorde da rodada de cada jogador.</p>'
        :'<p class="lead">Ninguém pontuou ainda. Seja o primeiro!</p>'))
      +'<button type="button" class="primary" data-act="back">Voltar</button>';
+  }else if(kind==='pass'){
+    h='<p class="eyebrow">Online</p><h1>Passe</h1><p class="lead">Jogue com amigos em uma sala. Crie uma sala e passe o código, ou entre com o código de alguém.</p>'
+     +'<button type="button" class="primary" data-act="room-join">Entrar em uma sala</button>'
+     +'<button type="button" class="ghost" data-act="room-create">Criar uma sala</button>'
+     +'<p class="code-msg err" role="alert">'+esc(roomMsg)+'</p>'
+     +'<button type="button" class="ghost" data-act="back" style="margin-top:4px">Voltar</button>';
+  }else if(kind==='join'){
+    h='<p class="eyebrow">Passe</p><h1>Entrar</h1><p class="lead">Digite o código da sala que seu amigo criou.</p>'
+     +'<div class="code-box"><input id="roomCode" type="text" maxlength="8" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="CÓDIGO" aria-label="Código da sala" value="'+esc(roomCodeVal)+'"><button type="button" class="ghost" data-act="room-go">Entrar</button></div>'
+     +'<p class="code-msg err" id="roomMsg" role="alert">'+esc(roomMsg)+'</p>'
+     +'<button type="button" class="ghost" data-act="room-menu">Voltar</button>';
+  }else if(kind==='pause'&&onl){
+    h='<p class="eyebrow">Jogo pausado · Sala online</p><h1>Pausa</h1>'
+     +'<p class="lead">Código da sala: <span class="room-code">'+esc(onl.code)+'</span><br>Passe esse código para seus amigos entrarem.</p>'
+     +'<button type="button" class="ghost" data-act="room-copy" style="margin:0 0 12px">Copiar código</button>'
+     +roomRosterHtml()
+     +'<button type="button" class="primary" data-act="resume">Continuar</button>'
+     +'<button type="button" class="ghost" data-act="settings">Configurações</button>'
+     +'<button type="button" class="ghost" data-act="menu">Sair da sala</button>';
   }else if(kind==='pause'){
     h='<p class="eyebrow">Jogo pausado</p><h1>Pausa</h1><p class="lead">'+(mode==='vs'?'Você ('+(team==='A'?'Azul':'Vermelho')+') '+stats.score+' x '+botScore+' Bot · '+DIFF_NAME[difficulty]:'Placar: '+stats.score+' pontos · '+stats.made+' de '+stats.att+' arremessos.')+'</p>'
      +'<button type="button" class="primary" data-act="resume">Continuar</button>'
@@ -1853,7 +1878,7 @@ function startGame(){
   paintHoops(mode==='vs');handMat.color.setHex(mode==='vs'?(team==='A'?0x8fbcff:0xff9a9a):0xffffff);applyFpChar();
   ballMesh.visible=true;shadow.visible=true;showHands(true);relT=9;trailClear();
   botScore=0;ball.shot=null;
-  bot.g.visible=(mode==='free'||mode==='vs');bot.hasBall=true;botBall.visible=(mode==='free');bot.pop=1;botBall.scale.setScalar(1);
+  bot.g.visible=((mode==='free'&&!onl)||mode==='vs');bot.hasBall=true;botBall.visible=(mode==='free'&&!onl);bot.pop=1;botBall.scale.setScalar(1);
   bot.x=3;bot.z=(mode==='vs')?sgP*4:-4;bot.jersey.color.setHex(mode==='vs'?(team==='A'?0xd94a4a:0x3b8bd9):0xff7a2f);
   bot.g.position.set(bot.x,0,bot.z);bot.g.rotation.y=Math.atan2(player.pos.x-bot.x,player.pos.z-bot.z);
   Object.assign(bot.ai,{spot:null,shootT:0,cd:0,stun:mode==='vs'?1.2:0,hop:0,phase:0,cnt:0,moving:false,dk:-1,windup:false,drT:0,drCool:0,drGuard:0,drSnd:0,drDir:1,drVx:0,drVz:0,seenSteal:-1,spd:1,boostT:0,drPen:0,drTrack:false,drBlocked:false});
@@ -1875,6 +1900,7 @@ function pauseGame(){
   try{document.exitPointerLock();}catch(e){}
 }
 function toMenu(){
+  leaveRoomLocal();
   rkReset();
   state='menu';charging=false;charge=0;lockedMode=false;
   ballMesh.visible=false;shadow.visible=false;showHands(false);trailClear();bot.g.visible=false;paintHoops(false);handMat.color.setHex(0xffffff);
@@ -2076,6 +2102,110 @@ async function openRank(){
   if(curKind==='rank'&&!overlay.hidden)renderCard('rank');
 }
 el('lbRank').addEventListener('click',openRank);
+/* ---------- Passe: salas online ---------- */
+let onl=null,roomPrevMode=null,roomT=0,roomBusy=false,roomSyncing=false,roomMsg='',roomCodeVal='',roomSig='';
+const remotes=new Map(),CHAR_COL={fogueteiro:0xff7a2f,nerd:0x2e9e5b};
+function roomReset(){onl=null;roomPrevMode=null;clearInterval(roomT);roomT=0;roomSyncing=false;roomSig='';clearRemotes();}
+function leaveRoomLocal(){
+  if(!onl)return;
+  const had=onl.code;clearInterval(roomT);roomT=0;onl=null;roomSig='';clearRemotes();
+  if(roomPrevMode){mode=roomPrevMode;roomPrevMode=null;}
+  api('POST','/api/room/leave',{code:had},true);
+}
+function roomRosterHtml(){
+  const ps=(onl&&onl.players)||[];
+  if(!ps.length)return '';
+  return '<div class="rank-box"><table class="rank"><thead><tr><th>#</th><th>Jogador</th><th class="sc">Pontos</th><th>Personagem</th></tr></thead><tbody>'
+    +ps.map(function(p,i){return '<tr'+(p.you?' class="me"':'')+'><td>'+(i+1)+'</td><td>'+esc(p.nick)+'</td><td class="sc">'+p.score+'</td><td>'+esc(charLabel(p.char))+'</td></tr>';}).join('')
+    +'</tbody></table></div>';
+}
+function openPass(){audio();lobbyEl.hidden=true;heroWrap.visible=true;roomMsg='';renderCard('pass');overlay.hidden=false;}
+el('lbPass').addEventListener('click',openPass);
+function enterRoom(code,players){
+  onl={code:code,players:players||[]};roomPrevMode=mode;mode='free';
+  startGame();lockPointer();
+  clearInterval(roomT);roomT=setInterval(roomSync,200);roomSync();
+}
+async function createRoom(){
+  if(roomBusy)return;roomBusy=true;roomMsg='';
+  const r=await api('POST','/api/room/create',{});
+  roomBusy=false;
+  if(r.status===401){sessionLost(r.data&&r.data.banned?r.data.error:'');return;}
+  if(r.status===200&&r.data&&r.data.code){enterRoom(r.data.code);return;}
+  roomMsg=r.status===0?'Sem conexão com o servidor.':((r.data&&r.data.error)||'Não foi possível criar a sala.');
+  renderCard('pass');
+}
+async function joinRoom(){
+  if(roomBusy)return;
+  const inp=card.querySelector('#roomCode');if(!inp)return;
+  const code=inp.value.toUpperCase().replace(/[^A-Z0-9]/g,'');roomCodeVal=code;
+  const fail=function(m){roomMsg=m;renderCard('join');const n=card.querySelector('#roomCode');if(n&&!isTouch)n.focus();};
+  if(code.length<4)return fail('Digite o código da sala.');
+  roomBusy=true;roomMsg='';
+  const r=await api('POST','/api/room/join',{code:code});
+  roomBusy=false;
+  if(r.status===401){sessionLost(r.data&&r.data.banned?r.data.error:'');return;}
+  if(r.status===200&&r.data&&r.data.code){roomCodeVal='';enterRoom(r.data.code,r.data.players);return;}
+  fail(r.status===0?'Sem conexão com o servidor.':((r.data&&r.data.error)||'Não foi possível entrar na sala.'));
+}
+async function roomSync(){
+  if(!onl||roomSyncing||!user)return;
+  roomSyncing=true;
+  const code=onl.code;
+  const r=await api('POST','/api/room/sync',{code:code,x:+player.pos.x.toFixed(2),z:+player.pos.z.toFixed(2),yaw:+player.yaw.toFixed(2),y:+Math.max(0,player.jump).toFixed(2),char:charId,score:stats.score});
+  roomSyncing=false;
+  if(!onl||onl.code!==code)return;
+  if(r.status===401){sessionLost(r.data&&r.data.banned?r.data.error:'');return;}
+  if(r.status===404&&r.data&&r.data.gone){showBcast('A sala foi encerrada. Crie uma nova ou entre com outro código.','Passe');toMenu();return;}
+  if(r.status===200&&r.data&&Array.isArray(r.data.players)){
+    onl.players=r.data.players;applyRemotes(onl.players);
+    const sig=onl.players.map(function(p){return p.nick+':'+p.score+':'+p.char;}).join('|');
+    if(sig!==roomSig){roomSig=sig;if(curKind==='pause'&&!overlay.hidden&&state==='paused')renderCard('pause');}
+  }
+}
+function nameTag(text){
+  const c=document.createElement('canvas');c.width=256;c.height=64;const g=c.getContext('2d');
+  g.font='700 34px "Barlow Condensed",Arial,sans-serif';g.textAlign='center';g.textBaseline='middle';
+  const w=Math.min(250,g.measureText(text).width+26);
+  g.fillStyle='rgba(13,21,38,.78)';g.fillRect(128-w/2,8,w,48);
+  g.fillStyle='#f4efe4';g.fillText(text,128,33,230);
+  const s=new T.Sprite(new T.SpriteMaterial({map:new T.CanvasTexture(c),transparent:true,depthWrite:false}));
+  s.scale.set(1.6,0.4,1);s.position.y=2.25;return s;
+}
+function makeRemote(p){
+  const k=2.0,g=new T.Group();
+  const jersey=new T.MeshLambertMaterial({color:CHAR_COL[p.char]||0x8fa0c8}),skin=new T.MeshLambertMaterial({color:0xd9a273});
+  const body=new T.Mesh(new T.CylinderGeometry(0.2*k,0.24*k,0.62*k,16),jersey);body.position.y=0.31*k;g.add(body);
+  const head=new T.Mesh(new T.SphereGeometry(0.13*k,16,12),skin);head.position.y=0.76*k;g.add(head);
+  const visor=new T.Mesh(new T.BoxGeometry(0.3,0.08,0.14),new T.MeshLambertMaterial({color:0x15181f}));visor.position.set(0,0.78*k,0.13*k);g.add(visor);
+  const sh=new T.Mesh(new T.PlaneGeometry(1.5,1.5),new T.MeshBasicMaterial({map:makeShadowTexture(),transparent:true,opacity:0.6,depthWrite:false}));
+  sh.rotation.x=-Math.PI/2;sh.position.y=0.016;g.add(sh);
+  g.add(nameTag(p.nick));
+  g.position.set(p.x,0,p.z);g.rotation.y=p.yaw+Math.PI;scene.add(g);
+  return {g:g,jersey:jersey,char:p.char,tx:p.x,tz:p.z,ty:0,tyaw:p.yaw+Math.PI};
+}
+function applyRemotes(list){
+  const seen={};
+  for(const p of list){
+    if(p.you)continue;
+    const key=String(p.nick).toLowerCase();seen[key]=1;
+    let r=remotes.get(key);
+    if(!r){r=makeRemote(p);remotes.set(key,r);note(p.nick+' entrou na sala');}
+    if(r.char!==p.char){r.char=p.char;r.jersey.color.setHex(CHAR_COL[p.char]||0x8fa0c8);}
+    r.tx=p.x;r.tz=p.z;r.ty=p.y;r.tyaw=p.yaw+Math.PI;
+  }
+  for(const [key,r] of remotes)if(!seen[key]){scene.remove(r.g);remotes.delete(key);note('Um jogador saiu da sala');}
+}
+function clearRemotes(){for(const r of remotes.values())scene.remove(r.g);remotes.clear();}
+function updateRemotes(dt){
+  if(!remotes.size)return;
+  const k=1-Math.exp(-12*dt);
+  for(const r of remotes.values()){
+    const g=r.g;
+    g.position.x+=(r.tx-g.position.x)*k;g.position.z+=(r.tz-g.position.z)*k;g.position.y+=(r.ty-g.position.y)*k;
+    g.rotation.y+=wrapPi(r.tyaw-g.rotation.y)*k;
+  }
+}
 el('lbChars').addEventListener('click',function(){audio();lobbyEl.hidden=true;heroWrap.visible=true;renderCard('chars');overlay.hidden=false;});
 /* ---------- códigos ---------- */
 const CODES={
@@ -2191,6 +2321,11 @@ card.addEventListener('click',function(e){
   if(a.indexOf('team-')===0){team=a.slice(5);saveProfile();renderCard('menu');return;}
   if(a.indexOf('char-')===0){charId=a.slice(5);applyHeroChar();saveProfile();renderCard('chars');return;}
   if(a==='back'){showLobby();return;}
+  if(a==='room-join'){roomMsg='';renderCard('join');const i=card.querySelector('#roomCode');if(i&&!isTouch)i.focus();return;}
+  if(a==='room-create'){createRoom();return;}
+  if(a==='room-go'){joinRoom();return;}
+  if(a==='room-menu'){roomMsg='';renderCard('pass');return;}
+  if(a==='room-copy'){try{navigator.clipboard.writeText(onl?onl.code:'');note('Código copiado: '+(onl?onl.code:''));}catch(x){note('Código da sala: '+(onl?onl.code:''));}return;}
   if(a==='play'){startGame();lockPointer();}
   else if(a==='resume'){state='playing';overlay.hidden=true;lockPointer();stage.focus();}
   else if(a==='menu'){toMenu();}
@@ -2220,7 +2355,7 @@ async function api(method,path,body,keepalive){
 function collectProfile(){
   if(!prof)return;
   prof.best=best;prof.char=charId;prof.codes=activeCodes.slice();prof.cfg=Object.assign({},cfg);prof.muted=muted;
-  prof.mode=mode;prof.difficulty=difficulty;prof.team=team;
+  prof.mode=(onl&&roomPrevMode)?roomPrevMode:mode;prof.difficulty=difficulty;prof.team=team;
 }
 function saveProfile(now){
   if(!user||!prof)return;
@@ -2262,7 +2397,7 @@ function applyProfile(d){
   applyCodes();applyCfg();
 }
 function resetLocal(){
-  user=null;prof=null;token=null;dirty=false;clearTimeout(saveT);clearInterval(pingT);closeAdmin();devReset();
+  user=null;prof=null;token=null;dirty=false;clearTimeout(saveT);clearInterval(pingT);closeAdmin();devReset();roomReset();
   try{localStorage.removeItem(SES_KEY);}catch(e){}
   best=0;charId=CHARACTERS[0].id;applyHeroChar();activeCodes=[];Object.assign(cfg,CFG_DEF);muted=false;syncSndBtn();
   mode='timed';difficulty='normal';team='A';
@@ -2614,7 +2749,7 @@ async function tryAdminCode(c,raw){
 /* ---------- entradas ---------- */
 const GAME_KEYS={KeyW:1,KeyA:1,KeyS:1,KeyD:1,ArrowUp:1,ArrowDown:1,ArrowLeft:1,ArrowRight:1,Space:1,ShiftLeft:1,ShiftRight:1};
 window.addEventListener('keydown',function(e){
-  if(isTyping(e)){if(e.code==='Enter'||e.code==='NumpadEnter'){e.preventDefault();if(e.target.id==='codeInput')redeemCode();else if(/^auth/.test(e.target.id||''))submitAuth();}return;}
+  if(isTyping(e)){if(e.code==='Enter'||e.code==='NumpadEnter'){e.preventDefault();if(e.target.id==='codeInput')redeemCode();else if(e.target.id==='roomCode')joinRoom();else if(/^auth/.test(e.target.id||''))submitAuth();}return;}
   if(GAME_KEYS[e.code])e.preventDefault();
   if(e.repeat)return;
   keys[e.code]=true;
@@ -2798,7 +2933,7 @@ function frame(now){
     camera.position.set(Math.sin(tAcc*0.1)*0.35,1.3,dz);
     camera.lookAt(0,0.9,0);
   }
-  updateCrowd(tAcc,dt);updateDust(tAcc,dt);updateConf(dt);
+  updateCrowd(tAcc,dt);updateDust(tAcc,dt);updateConf(dt);updateRemotes(dt);
   if((frameN++&1)===0)drawLed(tAcc);
   drawBoard(false);
   for(const h of hoops){
