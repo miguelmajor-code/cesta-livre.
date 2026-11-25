@@ -403,7 +403,7 @@ async function admin(req, res, pathname, ip) {
 
 /* ---------- salas online (Passe) ---------- */
 /* Salas ficam só na memória do servidor (somem se ele reiniciar). Cada jogador manda a própria posição ~5x/s e recebe a dos outros. */
-const ROOM_MAX = 6, ROOM_DROP = 40e3, ROOM_SEEN = 12e3;
+const ROOM_MAX = 6, ROOM_DROP = 40e3, ROOM_SEEN = 12e3, BLOCK_R = 3.8, BLOCK_CD = 1500;
 const ROOM_ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const rooms = new Map(), roomOf = new Map();
 const normRoom = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
@@ -448,7 +448,8 @@ function ballOut(r, self) {
   const b = r.ball;
   if (!b) return null;
   const hm = b.holder && r.members.get(b.holder);
-  return { x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, seq: b.seq, h: hm ? hm.nick : null, hy: b.holder === self, oy: b.owner === self };
+  return { x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, seq: b.seq, h: hm ? hm.nick : null, hy: b.holder === self, oy: b.owner === self,
+    k: b.blk && Date.now() - b.blk.t < 2000 ? b.blk.by : null, ki: b.blk ? b.blk.t : 0 };
 }
 function roomJoin(r, lk, nick) {
   if (roomOf.get(lk) && roomOf.get(lk) !== r.code) roomLeave(lk);
@@ -585,11 +586,27 @@ async function api(req, res, pathname) {
         const bl = r.ball;
         if (bl) {
           ballFix(r, a.lk);
+          if (b.bk === 1) {
+            /* bloqueio: vale contra quem está mirando (segurando a bola, estado 2) ou enterrando (estado 5), a até BLOCK_R */
+            const now = Date.now(), tgt = bl.holder || bl.owner, tm = tgt && tgt !== a.lk ? r.members.get(tgt) : null;
+            if (tm && now - tm.t < ROOM_SEEN && now - (m.bkAt || 0) > BLOCK_CD
+              && ((bl.holder && tm.a === 2) || (!bl.holder && tm.a === 5))
+              && Math.hypot(tm.x - m.x, tm.z - m.z) < BLOCK_R) {
+              let dx = m.x - tm.x, dz = m.z - tm.z;
+              const dl = Math.hypot(dx, dz) || 1;
+              dx /= dl; dz /= dl;
+              if (bl.holder) { bl.x = tm.x; bl.y = 2.3; bl.z = tm.z; }
+              bl.vx = dx * 6; bl.vy = 3; bl.vz = dz * 6;
+              bl.holder = null; bl.owner = a.lk; bl.seq++;
+              bl.blk = { by: m.nick, from: tgt, t: now };
+              m.bkAt = now;
+            }
+          }
           if (b.bs === 1 && bl.holder && bl.holder !== a.lk) {
             /* roubo: precisa estar perto de quem segura (Ser Perfeito rouba de qualquer lugar) */
             const hm = r.members.get(bl.holder);
             if (m.char === 'serperfeito' || (hm && Math.hypot(hm.x - m.x, hm.z - m.z) < 3.5)) { bl.holder = a.lk; bl.owner = a.lk; bl.seq++; }
-          } else if (b.bg === 1 && !bl.holder && (bl.owner === a.lk || Math.hypot(bl.x - m.x, bl.z - m.z) < 4.5)) {
+          } else if (b.bg === 1 && !bl.holder && !(bl.blk && bl.blk.from === a.lk && Date.now() - bl.blk.t < 900) && (bl.owner === a.lk || Math.hypot(bl.x - m.x, bl.z - m.z) < 4.5)) {
             bl.holder = a.lk; bl.owner = a.lk; bl.seq++;
           }
           if (b.bf === 1 && (bl.holder === a.lk || (!bl.holder && bl.owner === a.lk))) {
